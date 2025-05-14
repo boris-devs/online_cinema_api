@@ -5,8 +5,8 @@ from typing import List, Optional
 from sqlalchemy import (Integer, String, Enum, Boolean, func, DateTime, ForeignKey, Text, Date, UniqueConstraint)
 from sqlalchemy.orm import mapped_column, Mapped, relationship, validates
 
-from database import Base, validators
-from database.security import verify_password, hash_password, generate_secure_token
+from src.database import Base, account_validators
+from src.database.security import verify_password, hash_password, generate_secure_token
 
 
 class UserGroupEnum(enum.StrEnum):
@@ -100,7 +100,7 @@ class UserModel(Base):
         """
         Set the user's password after validating its strength and hashing it.
         """
-        validators.validate_password_strength(raw_password)
+        account_validators.validate_password_strength(raw_password)
         self._hashed_password = hash_password(raw_password)
 
     def verify_password(self, raw_password: str) -> bool:
@@ -111,7 +111,7 @@ class UserModel(Base):
 
     @validates("email")
     def validate_email(self, key, value):
-        return validators.validate_email(value.lower())
+        return account_validators.validate_email(value.lower())
 
 
 class UserProfileModel(Base):
