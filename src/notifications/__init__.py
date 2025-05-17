@@ -1,0 +1,2 @@
+from notifications.emails import EmailSender
+from notifications.interface import EmailSenderInterface
