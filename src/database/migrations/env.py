@@ -4,9 +4,9 @@ from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
+
+from src.database.session_postgres import sync_postgresql_engine
 from src.database.models.base import Base
-from src.database.models import accounts
-from src.database.session_sqlite import sync_sqlite_engine
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -60,11 +60,14 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    connectable = sync_sqlite_engine
+    connectable = sync_postgresql_engine
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            compare_type=True,
+            compare_server_default=True
         )
 
         with context.begin_transaction():
