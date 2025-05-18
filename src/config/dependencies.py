@@ -4,8 +4,8 @@ from fastapi import Depends
 
 from config.settings import  Settings, BaseAppSettings, TestingSettings
 from notifications import EmailSenderInterface, EmailSender
-from database.security.interface import JWTAuthManagerInterface
-from database.security.token_manager import JWTAuthManager
+from security.interface import JWTAuthManagerInterface
+from security.token_manager import JWTAuthManager
 from storages import S3StorageInterface, S3StorageClient
 
 
