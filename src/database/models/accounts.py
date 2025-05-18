@@ -5,17 +5,17 @@ from typing import List, Optional
 from sqlalchemy import (Integer, String, Enum, Boolean, func, DateTime, ForeignKey, Text, Date, UniqueConstraint)
 from sqlalchemy.orm import mapped_column, Mapped, relationship, validates
 
-from src.database import Base, account_validators
-from src.database.security import verify_password, hash_password, generate_secure_token
+from database import Base, account_validators
+from security import verify_password, hash_password, generate_secure_token
 
 
-class UserGroupEnum(enum.StrEnum):
+class UserGroupEnum(enum.Enum):
     user: str = 'USER'
     moderator: str = 'MODERATOR'
     admin: str = 'ADMIN'
 
 
-class GenderEnum(enum.StrEnum):
+class GenderEnum(enum.Enum):
     male: str = 'MALE'
     female: str = 'FEMALE'
 
