@@ -1,6 +1,6 @@
 import enum
 from datetime import datetime, date, timedelta, timezone
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 
 from sqlalchemy import (Integer, String, Enum, Boolean, func, DateTime, ForeignKey, Text, Date, UniqueConstraint)
 from sqlalchemy.orm import mapped_column, Mapped, relationship, validates
@@ -8,14 +8,17 @@ from sqlalchemy.orm import mapped_column, Mapped, relationship, validates
 from database import Base, account_validators
 from security import verify_password, hash_password, generate_secure_token
 
-
-class UserGroupEnum(enum.Enum):
-    user: str = 'USER'
-    moderator: str = 'MODERATOR'
-    admin: str = 'ADMIN'
+if TYPE_CHECKING:
+    from database.models.movies import ReactionsModel, CommentsModel
 
 
-class GenderEnum(enum.Enum):
+class UserGroupEnum(str, enum.Enum):
+    user: str = 'user'
+    moderator: str = 'moderator'
+    admin: str = 'admin'
+
+
+class GenderEnum(str, enum.Enum):
     male: str = 'MALE'
     female: str = 'FEMALE'
 
@@ -124,7 +127,8 @@ class UserProfileModel(Base):
     gender: Mapped[Optional[GenderEnum]] = mapped_column(Enum(GenderEnum))
     date_of_birth: Mapped[Optional[date]] = mapped_column(Date)
     info: Mapped[Optional[str]] = mapped_column(Text)
-
+    reactions: Mapped[list["ReactionsModel"]] = relationship("ReactionsModel", back_populates="user_profile")
+    comments: Mapped[list["CommentsModel"]] = relationship("CommentsModel", back_populates="user_profile")
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
