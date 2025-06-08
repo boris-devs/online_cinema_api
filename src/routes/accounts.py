@@ -17,6 +17,7 @@ from database import (
     PasswordResetTokenModel,
     RefreshTokenModel
 )
+from database.models.accounts import UserProfileModel
 from exceptions import BaseSecurityError
 from notifications import EmailSenderInterface
 from schemas import (
@@ -99,7 +100,7 @@ async def register_user(
             detail=f"A user with this email {user_data.email} already exists."
         )
 
-    stmt = select(UserGroupModel).where(UserGroupModel.name == UserGroupEnum.USER)
+    stmt = select(UserGroupModel).where(UserGroupModel.name == UserGroupEnum.user)
     result = await db.execute(stmt)
     user_group = result.scalars().first()
     if not user_group:
@@ -117,11 +118,15 @@ async def register_user(
         db.add(new_user)
         await db.flush()
 
+        user_profile = UserProfileModel(user_id=new_user.id)
+        db.add(user_profile)
+
         activation_token = ActivationTokenModel(user_id=new_user.id)
         db.add(activation_token)
 
         await db.commit()
         await db.refresh(new_user)
+        await db.refresh(user_profile)
     except SQLAlchemyError as e:
         await db.rollback()
         raise HTTPException(
@@ -304,8 +309,8 @@ async def request_password_reset_token(
     responses={
         400: {
             "description": (
-                "Bad Request - The provided email or token is invalid, "
-                "the token has expired, or the user account is not active."
+                    "Bad Request - The provided email or token is invalid, "
+                    "the token has expired, or the user account is not active."
             ),
             "content": {
                 "application/json": {
