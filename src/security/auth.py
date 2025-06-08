@@ -1,4 +1,8 @@
-from fastapi import Request, HTTPException, status
+from fastapi import Request, HTTPException, status, Depends
+
+from config.dependencies import get_jwt_auth_manager
+from exceptions import TokenExpiredError, InvalidTokenError
+from security.interface import JWTAuthManagerInterface
 
 
 def get_token(request: Request) -> str:
@@ -26,3 +30,13 @@ def get_token(request: Request) -> str:
         )
 
     return token
+
+
+def get_current_user(request: Request, jwt_manager: JWTAuthManagerInterface = Depends(get_jwt_auth_manager)):
+    try:
+        token = jwt_manager.decode_access_token(token=get_token(request))
+        return token.get("user_id")
+    except (TokenExpiredError,InvalidTokenError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token expired.")
