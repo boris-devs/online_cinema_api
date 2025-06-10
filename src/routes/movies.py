@@ -1,13 +1,14 @@
 import uuid
+from enum import Enum
+from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.openapi.models import Response
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi_pagination import add_pagination, Page
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi_pagination.ext.sqlalchemy import paginate
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 from starlette import status
 
 from database.models.accounts import UserProfileModel
@@ -16,15 +17,107 @@ from database.models.movies import MovieModel, StarsModel, GenresModel, Director
 from schemas import MovieListSchema
 from database import get_db
 from schemas.movies import MovieDetailSchema, MovieCreateSchema, MovieCommentCreateResponseSchema, \
-    MovieCommentCreateRequestSchema, MovieUserReactionResponseModel
+    MovieCommentCreateRequestSchema, MovieUserReactionResponseModel, MovieCreateResponseSchema
 from security.auth import get_current_user
 
 router = APIRouter()
 
 
+class MovieSortField(str, Enum):
+    YEAR_ASC = "year_asc"
+    YEAR_DESC = "year_desc"
+    PRICE_ASC = "price_asc"
+    PRICE_DESC = "price_desc"
+    IMDB_ASC = "imdb_asc"
+    IMDB_DESC = "imdb_desc"
+    POPULARITY_ASC = "popularity_asc"
+    POPULARITY_DESC = "popularity_desc"
+
+
 @router.get("/movies/", response_model=Page[MovieListSchema])
-async def get_movies(db: AsyncSession = Depends(get_db)):
-    return await paginate(db, select(MovieModel).order_by(MovieModel.year))
+async def get_movies(
+        db: AsyncSession = Depends(get_db),
+        year: Optional[int] = Query(None, description="Filter by exact release year"),
+        year_min: Optional[int] = Query(None, description="Minimum release year"),
+        year_max: Optional[int] = Query(None, description="Maximum release year"),
+        imdb_min: Optional[float] = Query(None, ge=0, le=10, description="Minimum IMDb rating (0-10)"),
+        imdb_max: Optional[float] = Query(None, ge=0, le=10, description="Maximum IMDb rating (0-10)"),
+        price_min: Optional[float] = Query(None, ge=0, description="Minimum price"),
+        price_max: Optional[float] = Query(None, ge=0, description="Maximum price"),
+        genres: Optional[List[str]] = Query(None, description="Filter by genre names"),
+        directors: Optional[List[str]] = Query(None, description="Filter by director names"),
+        actors: Optional[List[str]] = Query(None, description="Filter by actor names"),
+        search: Optional[str] = Query(None, description="Search in title, description, actors or directors"),
+        sort_by: Optional[MovieSortField] = Query(
+            MovieSortField.YEAR_DESC,
+            description="Sort by field and direction"
+        ),
+):
+    query = select(MovieModel).options(
+        joinedload(MovieModel.genres),
+        joinedload(MovieModel.directors),
+        joinedload(MovieModel.stars)
+    )
+
+    if year:
+        query = query.where(MovieModel.year == year)
+
+    if year_min:
+        query = query.where(MovieModel.year >= year_min)
+
+    if year_max:
+        query = query.where(MovieModel.year <= year_max)
+
+    if imdb_min:
+        query = query.where(MovieModel.imdb >= imdb_min)
+
+    if imdb_max:
+        query = query.where(MovieModel.imdb <= imdb_max)
+
+    if price_min:
+        query = query.where(MovieModel.price >= price_min)
+
+    if price_max:
+        query = query.where(MovieModel.price <= price_max)
+
+    if genres:
+        query = query.where(GenresModel.name.in_(genres))
+
+    if directors:
+        query = query.where(DirectorsModel.name.in_(directors))
+
+    if actors:
+        query = query.where(StarsModel.name.in_(actors))
+
+    if search:
+        search = f"%{search}%"
+        query = query.where(
+            or_(
+                MovieModel.name.ilike(search),
+                MovieModel.description.ilike(search),
+                DirectorsModel.name.ilike(search),
+                StarsModel.name.ilike(search)
+            )
+        )
+
+    if sort_by == MovieSortField.YEAR_ASC:
+        query = query.order_by(MovieModel.year.asc())
+    elif sort_by == MovieSortField.YEAR_DESC:
+        query = query.order_by(MovieModel.year.desc())
+    elif sort_by == MovieSortField.PRICE_ASC:
+        query = query.order_by(MovieModel.price.asc())
+    elif sort_by == MovieSortField.PRICE_DESC:
+        query = query.order_by(MovieModel.price.desc())
+    elif sort_by == MovieSortField.IMDB_ASC:
+        query = query.order_by(MovieModel.imdb.asc())
+    elif sort_by == MovieSortField.IMDB_DESC:
+        query = query.order_by(MovieModel.imdb.desc())
+    elif sort_by == MovieSortField.POPULARITY_ASC:
+        query = query.order_by(MovieModel.votes.asc())
+    elif sort_by == MovieSortField.POPULARITY_DESC:
+        query = query.order_by(MovieModel.votes.desc())
+
+    return await paginate(db, query)
 
 
 @router.get("/movies/detail/{id_film}/", response_model=MovieDetailSchema)
@@ -34,7 +127,9 @@ async def get_movie_detail(id_film: int, db: AsyncSession = Depends(get_db)):
                             .options(selectinload(MovieModel.genres),
                                      selectinload(MovieModel.stars),
                                      selectinload(MovieModel.directors),
-                                     selectinload(MovieModel.certification)))
+                                     selectinload(MovieModel.certification),
+                                     selectinload(MovieModel.reactions),
+                                     selectinload(MovieModel.comments)))
     result = stmt.scalars().first()
 
     if not result:
@@ -43,10 +138,7 @@ async def get_movie_detail(id_film: int, db: AsyncSession = Depends(get_db)):
     return MovieDetailSchema.model_validate(result)
 
 
-add_pagination(router)
-
-
-@router.post("/movies/add/", response_model=MovieDetailSchema, status_code=status.HTTP_201_CREATED)
+@router.post("/movies/add/", response_model=MovieCreateResponseSchema, status_code=status.HTTP_201_CREATED)
 async def add_movie(movie: MovieCreateSchema, db: AsyncSession = Depends(get_db)):
     stmt = await db.execute(select(MovieModel).where(MovieModel.name == movie.name))
     result = stmt.scalars().first()
@@ -104,7 +196,7 @@ async def add_movie(movie: MovieCreateSchema, db: AsyncSession = Depends(get_db)
         await db.commit()
         await db.refresh(movie_db, ["stars", "genres", "directors"])
 
-        return MovieDetailSchema.model_validate(movie_db)
+        return MovieCreateResponseSchema.model_validate(movie_db)
 
     except IntegrityError:
         await db.rollback()
@@ -283,3 +375,6 @@ async def delete_reaction(id_film: int,
     await db.delete(existing_reaction)
     await db.commit()
     return
+
+
+add_pagination(router)
