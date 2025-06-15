@@ -40,6 +40,14 @@ MovieDirectorsModel = Table(
     Column("director_id", ForeignKey("directors.id", ondelete="CASCADE"), primary_key=True),
 )
 
+MovieFavoritesModel = Table(
+    "movie_favorites",
+    Base.metadata,
+    Column("movie_id", ForeignKey("movies.id", ondelete="CASCADE"), primary_key=True),
+    Column("user_profile_id", ForeignKey("user_profiles.id", ondelete="CASCADE"), primary_key=True),
+    Column("added_at", DateTime(timezone=True), server_default=func.now())
+)
+
 
 class StarsModel(Base):
     __tablename__ = "stars"
@@ -121,6 +129,11 @@ class MovieModel(Base):
     price: Mapped[float] = mapped_column(DECIMAL(10, 2), nullable=False)
     certification_id: Mapped[int] = mapped_column(ForeignKey("certifications.id", ondelete="CASCADE"), nullable=False)
     certification: Mapped["CertificationsModel"] = relationship("CertificationsModel", back_populates="movies")
+
+    in_favorites: Mapped[list["UserProfileModel"]] = relationship(
+        "UserProfileModel",
+        secondary="movie_favorites",
+        back_populates="favorite_movies")
 
     stars: Mapped[list["StarsModel"]] = relationship(
         "StarsModel",

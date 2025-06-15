@@ -129,6 +129,7 @@ class UserProfileModel(Base):
     info: Mapped[Optional[str]] = mapped_column(Text)
     reactions: Mapped[list["ReactionsModel"]] = relationship("ReactionsModel", back_populates="user_profile")
     comments: Mapped[list["CommentsModel"]] = relationship("CommentsModel", back_populates="user_profile")
+    favorite_movies: Mapped[list["MovieModel"]] = relationship("MovieModel",
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
