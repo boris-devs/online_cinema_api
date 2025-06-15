@@ -125,7 +125,7 @@ class MovieCommentCreateResponseSchema(MovieCommentBaseSchema):
         from_attributes = True
 
 
-class MovieUserReactionResponseModel(BaseModel):
+class MovieUserReactionResponseSchema(BaseModel):
     message: str
 
     class Config:
