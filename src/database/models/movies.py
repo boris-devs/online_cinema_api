@@ -1,11 +1,12 @@
 import enum
+from datetime import datetime
 
 from sqlalchemy.types import Uuid
 
 from typing import Optional, List, TYPE_CHECKING
 
 from sqlalchemy import (Integer, String, ForeignKey, types, Float, Text, DECIMAL, Table, Column,
-                        UniqueConstraint, Enum as SQLEnum)
+                        UniqueConstraint, Enum as SQLEnum, DateTime, func)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -79,7 +80,7 @@ class DirectorsModel(Base):
     movies: Mapped[List["MovieModel"]] = relationship(
         "MovieModel",
         secondary=MovieDirectorsModel,
-                                                      back_populates="directors")
+        back_populates="directors")
 
 
 class ReactionsModel(Base):
@@ -101,6 +102,20 @@ class CertificationsModel(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
 
     movies: Mapped[list["MovieModel"]] = relationship("MovieModel", back_populates="certification")
+
+
+class RatingsModel(Base):
+    __tablename__ = "ratings"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_profile_id: Mapped[int] = mapped_column(ForeignKey("user_profiles.id", ondelete="CASCADE"))
+    user_profile: Mapped["UserProfileModel"] = relationship("UserProfileModel", back_populates="ratings")
+    movie_id: Mapped[int] = mapped_column(ForeignKey("movies.id", ondelete="CASCADE"))
+    movie: Mapped["MovieModel"] = relationship("MovieModel", back_populates="ratings")
+    rating: Mapped[int] = mapped_column(Integer, nullable=False)
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint('user_profile_id', 'movie_id', name='_user_profile_movie_rating_uc'),)
+
 
 class CommentsModel(Base):
     __tablename__ = "comments"
@@ -129,6 +144,7 @@ class MovieModel(Base):
     price: Mapped[float] = mapped_column(DECIMAL(10, 2), nullable=False)
     certification_id: Mapped[int] = mapped_column(ForeignKey("certifications.id", ondelete="CASCADE"), nullable=False)
     certification: Mapped["CertificationsModel"] = relationship("CertificationsModel", back_populates="movies")
+    ratings: Mapped[list["RatingsModel"]] = relationship("RatingsModel", back_populates="movie")
 
     in_favorites: Mapped[list["UserProfileModel"]] = relationship(
         "UserProfileModel",

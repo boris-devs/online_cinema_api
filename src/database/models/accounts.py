@@ -9,7 +9,7 @@ from database import Base, account_validators
 from security import verify_password, hash_password, generate_secure_token
 
 if TYPE_CHECKING:
-    from database.models.movies import ReactionsModel, CommentsModel
+    from database.models.movies import (ReactionsModel, CommentsModel, MovieModel, RatingsModel)
 
 
 class UserGroupEnum(str, enum.Enum):
@@ -130,6 +130,9 @@ class UserProfileModel(Base):
     reactions: Mapped[list["ReactionsModel"]] = relationship("ReactionsModel", back_populates="user_profile")
     comments: Mapped[list["CommentsModel"]] = relationship("CommentsModel", back_populates="user_profile")
     favorite_movies: Mapped[list["MovieModel"]] = relationship("MovieModel",
+                                                               secondary="movie_favorites",
+                                                               back_populates="in_favorites")
+    ratings: Mapped[list["RatingsModel"]] = relationship("RatingsModel", back_populates="user_profile")
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
