@@ -58,16 +58,15 @@ class MovieBaseSchema(BaseModel):
     price: float
     certification_id: int
 
-
     class Config:
         from_attributes = True
+
 
 class MovieListSchema(MovieBaseSchema):
     id: int
     stars: List[StarsSchema]
     genres: List[GenresSchema]
     directors: List[DirectorsSchema]
-
 
     class Config:
         from_attributes = True
@@ -79,7 +78,6 @@ class MovieDetailSchema(MovieBaseSchema):
     stars: List[StarsSchema]
     genres: List[GenresSchema]
     directors: List[DirectorsSchema]
-
 
     class Config:
         from_attributes = True
@@ -95,6 +93,7 @@ class MovieCreateSchema(MovieBaseSchema):
     def normalize_list_fields(cls, value: List[str]) -> List[str]:
         return [item.title() for item in value]
 
+
 class MovieCreateResponseSchema(MovieBaseSchema):
     id: int
     uuid: uuid.UUID
@@ -104,6 +103,7 @@ class MovieCreateResponseSchema(MovieBaseSchema):
 
     class Config:
         from_attributes = True
+
 
 class MovieCommentBaseSchema(BaseModel):
     text: str
@@ -130,3 +130,7 @@ class MovieUserReactionResponseModel(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class MovieAddFavoriteResponseSchema(BaseModel):
+    message: str
