@@ -4,7 +4,7 @@ from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi_pagination import add_pagination, Page
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, insert, delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi_pagination.ext.sqlalchemy import paginate
@@ -13,11 +13,12 @@ from starlette import status
 
 from database.models.accounts import UserProfileModel
 from database.models.movies import MovieModel, StarsModel, GenresModel, DirectorsModel, CommentsModel, ReactionsModel, \
-    ReactionType
+    ReactionType, MovieFavoritesModel
 from schemas import MovieListSchema
 from database import get_db
 from schemas.movies import MovieDetailSchema, MovieCreateSchema, MovieCommentCreateResponseSchema, \
-    MovieCommentCreateRequestSchema, MovieUserReactionResponseModel, MovieCreateResponseSchema
+    MovieCommentCreateRequestSchema, MovieUserReactionResponseSchema, MovieCreateResponseSchema, \
+    MovieAddFavoriteResponseSchema, GenresSchema
 from security.auth import get_current_user
 
 router = APIRouter()
@@ -291,7 +292,7 @@ async def like_movie(
             existing_reaction.reaction_type = ReactionType.LIKE
             await db.commit()
             await db.refresh(existing_reaction)
-            return MovieUserReactionResponseModel(message="Movie liked successfully")
+            return MovieUserReactionResponseSchema(message="Movie liked successfully")
 
 
     else:
@@ -376,5 +377,186 @@ async def delete_reaction(id_film: int,
     await db.commit()
     return
 
+
+@router.post("/movies/{id_film}/add_to_favorite/",
+             response_model=MovieAddFavoriteResponseSchema,
+             status_code=status.HTTP_201_CREATED)
+async def add_to_favorite(
+        id_film: int,
+        current_user_id: int = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)):
+    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
+    existing_user_profile = stmt_user_profile.scalars().first()
+    if not existing_user_profile:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    stmt_existing_record = await db.execute(
+        select(MovieFavoritesModel)
+        .where(
+            MovieFavoritesModel.c.movie_id == id_film,
+            MovieFavoritesModel.c.user_profile_id == existing_user_profile.id
+        ))
+    existing_record = stmt_existing_record.scalars().all()
+    if existing_record:
+        raise HTTPException(status_code=400, detail="Movie already in favorite movies.")
+
+    await db.execute(
+        insert(MovieFavoritesModel)
+        .values(movie_id=id_film,
+                user_profile_id=existing_user_profile.id)
+    )
+    await db.commit()
+
+    return "Successfully added to favorite movies."
+
+
+@router.delete("/movies/{id_film}/delete_favorite/", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_from_favorite(
+        id_film: int,
+        current_user_id: int = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)):
+    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
+    existing_user_profile = stmt_user_profile.scalars().first()
+    if not existing_user_profile:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    stmt_existing_record = await db.execute(
+        select(MovieFavoritesModel)
+        .where(
+            MovieFavoritesModel.c.movie_id == id_film,
+            MovieFavoritesModel.c.user_profile_id == existing_user_profile.id
+        ))
+    existing_record = stmt_existing_record.scalars().all()
+    if not existing_record:
+        raise HTTPException(status_code=400, detail="Movie not in your favorite movies.")
+
+    await db.execute(
+        delete(MovieFavoritesModel)
+        .where(
+            MovieFavoritesModel.c.movie_id == id_film,
+            MovieFavoritesModel.c.user_profile_id == existing_user_profile.id
+        )
+    )
+    await db.commit()
+    return
+
+
+@router.get("/movies/favourites/", response_model=Page[MovieListSchema])
+async def get_favourite_movies(
+        db: AsyncSession = Depends(get_db),
+        current_user_id: int = Depends(get_current_user),
+        year: Optional[int] = Query(None, description="Filter by exact release year"),
+        year_min: Optional[int] = Query(None, description="Minimum release year"),
+        year_max: Optional[int] = Query(None, description="Maximum release year"),
+        imdb_min: Optional[float] = Query(None, ge=0, le=10, description="Minimum IMDb rating (0-10)"),
+        imdb_max: Optional[float] = Query(None, ge=0, le=10, description="Maximum IMDb rating (0-10)"),
+        price_min: Optional[float] = Query(None, ge=0, description="Minimum price"),
+        price_max: Optional[float] = Query(None, ge=0, description="Maximum price"),
+        genres: Optional[List[str]] = Query(None, description="Filter by genre names"),
+        directors: Optional[List[str]] = Query(None, description="Filter by director names"),
+        actors: Optional[List[str]] = Query(None, description="Filter by actor names"),
+        search: Optional[str] = Query(None, description="Search in title, description, actors or directors"),
+        sort_by: Optional[MovieSortField] = Query(
+            MovieSortField.YEAR_DESC,
+            description="Sort by field and direction"
+        ),
+):
+    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
+    existing_user_profile = stmt_user_profile.scalars().first()
+    if not existing_user_profile:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    query = (select(MovieModel).join(
+        MovieFavoritesModel,
+        MovieFavoritesModel.c.movie_id == MovieModel.id
+    ).where(
+        MovieFavoritesModel.c.user_profile_id == existing_user_profile.id
+    )
+    .options(
+        joinedload(MovieModel.genres),
+        joinedload(MovieModel.directors),
+        joinedload(MovieModel.stars)
+    ))
+
+    if year:
+        query = query.where(MovieModel.year == year)
+
+    if year_min:
+        query = query.where(MovieModel.year >= year_min)
+
+    if year_max:
+        query = query.where(MovieModel.year <= year_max)
+
+    if imdb_min:
+        query = query.where(MovieModel.imdb >= imdb_min)
+
+    if imdb_max:
+        query = query.where(MovieModel.imdb <= imdb_max)
+
+    if price_min:
+        query = query.where(MovieModel.price >= price_min)
+
+    if price_max:
+        query = query.where(MovieModel.price <= price_max)
+
+    if genres:
+        query = query.where(GenresModel.name.in_(genres))
+
+    if directors:
+        query = query.where(DirectorsModel.name.in_(directors))
+
+    if actors:
+        query = query.where(StarsModel.name.in_(actors))
+
+    if search:
+        search = f"%{search}%"
+        query = query.where(
+            or_(
+                MovieModel.name.ilike(search),
+                MovieModel.description.ilike(search),
+                DirectorsModel.name.ilike(search),
+                StarsModel.name.ilike(search)
+            )
+        )
+
+    if sort_by == MovieSortField.YEAR_ASC:
+        query = query.order_by(MovieModel.year.asc())
+    elif sort_by == MovieSortField.YEAR_DESC:
+        query = query.order_by(MovieModel.year.desc())
+    elif sort_by == MovieSortField.PRICE_ASC:
+        query = query.order_by(MovieModel.price.asc())
+    elif sort_by == MovieSortField.PRICE_DESC:
+        query = query.order_by(MovieModel.price.desc())
+    elif sort_by == MovieSortField.IMDB_ASC:
+        query = query.order_by(MovieModel.imdb.asc())
+    elif sort_by == MovieSortField.IMDB_DESC:
+        query = query.order_by(MovieModel.imdb.desc())
+    elif sort_by == MovieSortField.POPULARITY_ASC:
+        query = query.order_by(MovieModel.votes.asc())
+    elif sort_by == MovieSortField.POPULARITY_DESC:
+        query = query.order_by(MovieModel.votes.desc())
+
+    return await paginate(db, query)
+
+
+@router.get("/genres/", response_model=List[GenresSchema], status_code=status.HTTP_200_OK)
+async def get_genres(db: AsyncSession = Depends(get_db)):
+    genres = await db.execute(select(GenresModel).order_by(GenresModel.name.desc()))
+    genres = genres.scalars().all()
+    return genres
+
+
+@router.get("/movies/{name_genre}/", response_model=Page[MovieListSchema])
+async def get_movies_by_genre(
+        name_genre: str,
+        db: AsyncSession = Depends(get_db)):
+    movies = select(MovieModel).options(joinedload(MovieModel.genres),
+                                   joinedload(MovieModel.directors),
+                                   joinedload(MovieModel.stars),
+                                   joinedload(MovieModel.reactions),
+                                   joinedload(MovieModel.comments)).where(MovieModel.genres.any(GenresModel.name == name_genre))
+
+
+    return await paginate(db, movies)
 
 add_pagination(router)
