@@ -233,7 +233,7 @@ async def create_comment(
     return MovieCommentCreateResponseSchema.model_validate(comment)
 
 
-@router.delete("/movies/detail/{id_film}/comment/{id_comment}/delete/", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/movies/{id_film}/{id_comment}/delete/", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_comment(
         id_film: int,
         id_comment: int,
@@ -261,8 +261,8 @@ async def delete_comment(
     return
 
 
-@router.post("/movies/detail/{id_film}/like/",
-             response_model=MovieUserReactionResponseModel,
+@router.post("/movies/{id_film}/like/",
+             response_model=MovieUserReactionResponseSchema,
              status_code=status.HTTP_201_CREATED)
 async def like_movie(
         id_film: int,
@@ -304,11 +304,11 @@ async def like_movie(
         await db.commit()
         await db.refresh(like)
 
-        return MovieUserReactionResponseModel(message="Movie liked successfully")
+        return MovieUserReactionResponseSchema(message="Movie liked successfully")
 
 
-@router.post("/movies/detail/{id_film}/dislike/",
-             response_model=MovieUserReactionResponseModel,
+@router.post("/movies/{id_film}/dislike/",
+             response_model=MovieUserReactionResponseSchema,
              status_code=status.HTTP_201_CREATED)
 async def dislike_movie(id_film: int,
                         current_user_id: int = Depends(get_current_user),
@@ -336,7 +336,7 @@ async def dislike_movie(id_film: int,
             existing_reaction.reaction_type = ReactionType.DISLIKE
             await db.commit()
             await db.refresh(existing_reaction)
-            return MovieUserReactionResponseModel(message="Movie disliked successfully")
+            return MovieUserReactionResponseSchema(message="Movie disliked successfully")
 
     else:
         dislike = ReactionsModel(
@@ -348,10 +348,10 @@ async def dislike_movie(id_film: int,
         await db.commit()
         await db.refresh(dislike)
 
-        return MovieUserReactionResponseModel(message="Movie disliked successfully")
+        return MovieUserReactionResponseSchema(message="Movie disliked successfully")
 
 
-@router.delete("/movies/detail/{id_film}/delete_reaction/", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/movies/{id_film}/delete_reaction/", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_reaction(id_film: int,
                           current_user_id: int = Depends(get_current_user),
                           db: AsyncSession = Depends(get_db)):
