@@ -1,6 +1,7 @@
+from datetime import datetime
 from typing import Optional, List
 
-from pydantic import BaseModel, field_validator, Field
+from pydantic import BaseModel, field_validator, Field, ConfigDict
 import uuid
 
 
@@ -8,16 +9,14 @@ class StarsSchema(BaseModel):
     id: int
     name: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class GenresSchema(BaseModel):
     id: int
     name: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class GenresMoviesCountSchema(GenresSchema):
     movies_count: int
@@ -28,8 +27,7 @@ class DirectorsSchema(BaseModel):
     id: int
     name: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CommentSchema(BaseModel):
@@ -37,8 +35,7 @@ class CommentSchema(BaseModel):
     text: str
     user_profile_id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ReactionSchema(BaseModel):
@@ -46,8 +43,7 @@ class ReactionSchema(BaseModel):
     reaction_type: str
     user_profile_id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MovieBaseSchema(BaseModel):
@@ -62,8 +58,7 @@ class MovieBaseSchema(BaseModel):
     price: float
     certification_id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MovieListSchema(MovieBaseSchema):
@@ -72,8 +67,7 @@ class MovieListSchema(MovieBaseSchema):
     genres: List[GenresSchema]
     directors: List[DirectorsSchema]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MovieDetailSchema(MovieBaseSchema):
@@ -105,8 +99,7 @@ class MovieCreateResponseSchema(MovieBaseSchema):
     genres: List[GenresSchema]
     directors: List[DirectorsSchema]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MovieCommentBaseSchema(BaseModel):
@@ -118,22 +111,19 @@ class MovieCommentBaseSchema(BaseModel):
 class MovieCommentCreateRequestSchema(BaseModel):
     text: str = Field(min_length=1, max_length=100)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MovieCommentCreateResponseSchema(MovieCommentBaseSchema):
     id: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MovieUserReactionResponseSchema(BaseModel):
     message: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MovieAddFavoriteResponseSchema(BaseModel):
