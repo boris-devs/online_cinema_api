@@ -18,7 +18,7 @@ from schemas import MovieListSchema
 from database import get_db
 from schemas.movies import MovieDetailSchema, MovieCreateSchema, MovieCommentCreateResponseSchema, \
     MovieCommentCreateRequestSchema, MovieUserReactionResponseSchema, MovieCreateResponseSchema, \
-    MovieAddFavoriteResponseSchema,  MovieRatingRequestSchema, MovieRatingResponseSchema, \
+    MovieAddFavoriteResponseSchema, MovieRatingRequestSchema, MovieRatingResponseSchema, \
     GenresMoviesCountSchema
 from security.auth import get_current_user
 
@@ -542,7 +542,6 @@ async def get_favourite_movies(
 
 @router.get("/genres/", response_model=List[GenresMoviesCountSchema], status_code=status.HTTP_200_OK)
 async def get_genres(db: AsyncSession = Depends(get_db)):
-
     query = (
         select(
             GenresModel.id,
@@ -617,6 +616,33 @@ async def add_rating(
     await db.refresh(rating)
 
     return MovieRatingResponseSchema.model_validate(rating)
+
+@router.delete("/movies/{id_film}/delete_rating/", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_rating(
+        id_film: int,
+        current_user_id: int = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)):
+    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
+    existing_user_profile = stmt_user_profile.scalar_one_or_none()
+    if not existing_user_profile:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    stmt_movie = await db.execute(select(MovieModel).where(MovieModel.id == id_film))
+    existing_movie = stmt_movie.scalar_one_or_none()
+    if not existing_movie:
+        raise HTTPException(status_code=404, detail="Movie not found.")
+
+    stmt_rating = await db.execute(select(RatingsModel)
+                                   .where(RatingsModel.user_profile_id == existing_user_profile.id,
+                                          RatingsModel.movie_id == id_film))
+    rating = stmt_rating.scalar_one_or_none()
+    if not rating:
+        raise HTTPException(status_code=404, detail="Your rating on this movie not found.")
+
+    await db.delete(rating)
+    await db.commit()
+
+    return
 
 
 add_pagination(router)
