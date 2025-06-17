@@ -7,7 +7,7 @@ from typing import Optional, List, TYPE_CHECKING
 
 from sqlalchemy import (Integer, String, ForeignKey, types, Float, Text, DECIMAL, Table, Column,
                         UniqueConstraint, Enum as SQLEnum, DateTime, func)
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from database import Base
 
@@ -116,6 +116,11 @@ class RatingsModel(Base):
 
     __table_args__ = (UniqueConstraint('user_profile_id', 'movie_id', name='_user_profile_movie_rating_uc'),)
 
+    @validates("rating")
+    def validate_rating(self, key, value):
+        if value < 1 or value > 10:
+            raise ValueError("Rating must be between 1 and 10.")
+        return value
 
 class CommentsModel(Base):
     __tablename__ = "comments"
