@@ -144,7 +144,7 @@ class CommentLikesModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user_profile: Mapped["UserProfileModel"] = relationship("UserProfileModel", back_populates="comment_likes")
-    comment: Mapped["MovieModel"] = relationship("MovieModel", back_populates="comment_likes")
+    comment: Mapped["CommentsModel"] = relationship("CommentsModel", back_populates="comment_likes")
 
     __table_args__ = (UniqueConstraint('user_profile_id', 'comment_id', name='_user_profile_comment_uc'),)
 
