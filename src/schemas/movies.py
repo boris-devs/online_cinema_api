@@ -148,3 +148,10 @@ class MovieRatingResponseSchema(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+class CommentLikeResponseSchema(BaseModel):
+    id: int
+    comment_id: int
+    user_profile_id: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
