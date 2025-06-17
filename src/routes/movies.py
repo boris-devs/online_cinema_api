@@ -19,7 +19,7 @@ from database import get_db
 from schemas.movies import MovieDetailSchema, MovieCreateSchema, MovieCommentCreateResponseSchema, \
     MovieCommentCreateRequestSchema, MovieUserReactionResponseSchema, MovieCreateResponseSchema, \
     MovieAddFavoriteResponseSchema, MovieRatingRequestSchema, MovieRatingResponseSchema, \
-    GenresMoviesCountSchema
+    GenresMoviesCountSchema, CommentLikeResponseSchema
 from security.auth import get_current_user
 
 router = APIRouter()
@@ -263,7 +263,37 @@ async def delete_comment(
     return
 
 
-@router.post("/movies/{id_film}/like/",
+@router.post("/comments/{comment_id}/like/", response_model=CommentLikeResponseSchema, status_code=status.HTTP_201_CREATED)
+async def like_comment(
+        comment_id: int,
+        current_user_id: int = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)):
+    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
+    existing_user_profile = stmt_user_profile.scalars().first()
+    if not existing_user_profile:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    existing_comment = await db.execute(
+        select(CommentLikesModel)
+        .where(CommentLikesModel.comment_id == comment_id,
+               CommentLikesModel.user_profile_id == existing_user_profile.id))
+    existing_comment = existing_comment.scalar_one_or_none()
+    if existing_comment:
+        raise HTTPException(status_code=409, detail="You have already liked this comment.")
+
+    record_like = CommentLikesModel(
+        comment_id=comment_id,
+        user_profile_id=existing_user_profile.id
+    )
+    db.add(record_like)
+    await db.commit()
+    await db.refresh(record_like)
+
+    return CommentLikeResponseSchema.model_validate(record_like)
+
+
+
+@router.post("/movies/{movie_id}/like/",
              response_model=MovieUserReactionResponseSchema,
              status_code=status.HTTP_201_CREATED)
 async def like_movie(
