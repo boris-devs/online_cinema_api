@@ -559,4 +559,46 @@ async def get_movies_by_genre(
 
     return await paginate(db, movies)
 
+
+@router.post("/movies/{id_film}/rating/",
+             response_model=MovieRatingResponseSchema,
+             status_code=status.HTTP_201_CREATED)
+async def add_rating(
+        id_film: int,
+        data: MovieRatingRequestSchema,
+        current_user_id: int = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)):
+    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
+    existing_user_profile = stmt_user_profile.scalar_one_or_none()
+    if not existing_user_profile:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    stmt_movie = await db.execute(select(MovieModel).where(MovieModel.id == id_film))
+    existing_movie = stmt_movie.scalar_one_or_none()
+    if not existing_movie:
+        raise HTTPException(status_code=404, detail="Movie not found.")
+
+    stmt_rating = await db.execute(select(RatingsModel).where(RatingsModel.user_profile_id == existing_user_profile.id,
+                                                              RatingsModel.movie_id == existing_movie.id))
+    existing_rating = stmt_rating.scalar_one_or_none()
+    if existing_rating:
+        existing_rating.rating = data.rating
+        await db.commit()
+        await db.refresh(existing_rating)
+
+        return existing_rating
+
+    rating = RatingsModel(
+        user_profile_id=existing_user_profile.id,
+        movie_id=existing_movie.id,
+        rating=data.rating
+    )
+
+    db.add(rating)
+    await db.commit()
+    await db.refresh(rating)
+
+    return MovieRatingResponseSchema.model_validate(rating)
+
+
 add_pagination(router)
