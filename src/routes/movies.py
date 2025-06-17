@@ -13,7 +13,7 @@ from starlette import status
 
 from database.models.accounts import UserProfileModel
 from database.models.movies import MovieModel, StarsModel, GenresModel, DirectorsModel, CommentsModel, ReactionsModel, \
-    ReactionType, MovieFavoritesModel, RatingsModel, MovieGenresModel
+    ReactionType, MovieFavoritesModel, RatingsModel, MovieGenresModel, CommentLikesModel
 from schemas import MovieListSchema
 from database import get_db
 from schemas.movies import MovieDetailSchema, MovieCreateSchema, MovieCommentCreateResponseSchema, \
@@ -122,10 +122,10 @@ async def get_movies(
     return await paginate(db, query)
 
 
-@router.get("/movies/detail/{id_film}/", response_model=MovieDetailSchema)
-async def get_movie_detail(id_film: int, db: AsyncSession = Depends(get_db)):
+@router.get("/movies/detail/{movie_id}/", response_model=MovieDetailSchema)
+async def get_movie_detail(movie_id: int, db: AsyncSession = Depends(get_db)):
     stmt = await db.execute(select(MovieModel)
-                            .where(MovieModel.id == id_film)
+                            .where(MovieModel.id == movie_id)
                             .options(selectinload(MovieModel.genres),
                                      selectinload(MovieModel.stars),
                                      selectinload(MovieModel.directors),
@@ -205,10 +205,10 @@ async def add_movie(movie: MovieCreateSchema, db: AsyncSession = Depends(get_db)
         raise HTTPException(status_code=400, detail="Invalid input data.")
 
 
-@router.post("/movies/detail/{id_film}/comment/", response_model=MovieCommentCreateResponseSchema,
+@router.post("/movies/{movie_id}/comment/", response_model=MovieCommentCreateResponseSchema,
              status_code=status.HTTP_201_CREATED)
 async def create_comment(
-        id_film: int,
+        movie_id: int,
         comment: MovieCommentCreateRequestSchema,
         db: AsyncSession = Depends(get_db),
         current_user_id: int = Depends(get_current_user)
@@ -218,7 +218,7 @@ async def create_comment(
     if not existing_user_profile:
         raise HTTPException(status_code=404, detail="User not found.")
 
-    stmt_movie = await db.execute(select(MovieModel).where(MovieModel.id == id_film))
+    stmt_movie = await db.execute(select(MovieModel).where(MovieModel.id == movie_id))
     existing_movie = stmt_movie.scalars().first()
     if not existing_movie:
         raise HTTPException(status_code=404, detail="Movie not found.")
@@ -235,10 +235,10 @@ async def create_comment(
     return MovieCommentCreateResponseSchema.model_validate(comment)
 
 
-@router.delete("/movies/{id_film}/{id_comment}/delete/", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/movies/{movie_id}/{comment_id}/delete/", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_comment(
-        id_film: int,
-        id_comment: int,
+        movie_id: int,
+        comment_id: int,
         db: AsyncSession = Depends(get_db),
         current_user_id: int = Depends(get_current_user)
 ):
@@ -247,12 +247,12 @@ async def delete_comment(
     if not existing_user_profile:
         raise HTTPException(status_code=404, detail="User not found.")
 
-    stmt_movie = await db.execute(select(MovieModel).where(MovieModel.id == id_film))
+    stmt_movie = await db.execute(select(MovieModel).where(MovieModel.id == movie_id))
     existing_movie = stmt_movie.scalars().first()
     if not existing_movie:
         raise HTTPException(status_code=404, detail="Movie not found.")
 
-    stmt_comment = await db.execute(select(CommentsModel).where(CommentsModel.id == id_comment,
+    stmt_comment = await db.execute(select(CommentsModel).where(CommentsModel.id == comment_id,
                                                                 CommentsModel.user_profile_id == existing_user_profile.id))
     existing_comment = stmt_comment.scalars().first()
     if not existing_comment:
@@ -297,10 +297,10 @@ async def like_comment(
              response_model=MovieUserReactionResponseSchema,
              status_code=status.HTTP_201_CREATED)
 async def like_movie(
-        id_film: int,
+        movie_id: int,
         current_user_id: int = Depends(get_current_user),
         db: AsyncSession = Depends(get_db)):
-    stmt = await db.execute(select(MovieModel).where(MovieModel.id == id_film))
+    stmt = await db.execute(select(MovieModel).where(MovieModel.id == movie_id))
     existing_movie = stmt.scalars().first()
     if not existing_movie:
         raise HTTPException(status_code=404, detail="Movie not found.")
@@ -339,13 +339,13 @@ async def like_movie(
         return MovieUserReactionResponseSchema(message="Movie liked successfully")
 
 
-@router.post("/movies/{id_film}/dislike/",
+@router.post("/movies/{movie_id}/dislike/",
              response_model=MovieUserReactionResponseSchema,
              status_code=status.HTTP_201_CREATED)
-async def dislike_movie(id_film: int,
+async def dislike_movie(movie_id: int,
                         current_user_id: int = Depends(get_current_user),
                         db: AsyncSession = Depends(get_db)):
-    stmt = await db.execute(select(MovieModel).where(MovieModel.id == id_film))
+    stmt = await db.execute(select(MovieModel).where(MovieModel.id == movie_id))
     existing_movie = stmt.scalars().first()
     if not existing_movie:
         raise HTTPException(status_code=404, detail="Movie not found.")
@@ -383,11 +383,11 @@ async def dislike_movie(id_film: int,
         return MovieUserReactionResponseSchema(message="Movie disliked successfully")
 
 
-@router.delete("/movies/{id_film}/delete_reaction/", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_reaction(id_film: int,
+@router.delete("/movies/{movie_id}/delete_reaction/", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_reaction(movie_id: int,
                           current_user_id: int = Depends(get_current_user),
                           db: AsyncSession = Depends(get_db)):
-    stmt = await db.execute(select(MovieModel).where(MovieModel.id == id_film))
+    stmt = await db.execute(select(MovieModel).where(MovieModel.id == movie_id))
     existing_movie = stmt.scalars().first()
     if not existing_movie:
         raise HTTPException(status_code=404, detail="Movie not found.")
@@ -409,11 +409,11 @@ async def delete_reaction(id_film: int,
     return
 
 
-@router.post("/movies/{id_film}/add_to_favorite/",
+@router.post("/movies/{movie_id}/add_to_favorite/",
              response_model=MovieAddFavoriteResponseSchema,
              status_code=status.HTTP_201_CREATED)
 async def add_to_favorite(
-        id_film: int,
+        movie_id: int,
         current_user_id: int = Depends(get_current_user),
         db: AsyncSession = Depends(get_db)):
     stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
@@ -424,7 +424,7 @@ async def add_to_favorite(
     stmt_existing_record = await db.execute(
         select(MovieFavoritesModel)
         .where(
-            MovieFavoritesModel.c.movie_id == id_film,
+            MovieFavoritesModel.c.movie_id == movie_id,
             MovieFavoritesModel.c.user_profile_id == existing_user_profile.id
         ))
     existing_record = stmt_existing_record.scalars().all()
@@ -433,7 +433,7 @@ async def add_to_favorite(
 
     await db.execute(
         insert(MovieFavoritesModel)
-        .values(movie_id=id_film,
+        .values(movie_id=movie_id,
                 user_profile_id=existing_user_profile.id)
     )
     await db.commit()
@@ -441,9 +441,9 @@ async def add_to_favorite(
     return "Successfully added to favorite movies."
 
 
-@router.delete("/movies/{id_film}/delete_favorite/", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/movies/{movie_id}/delete_favorite/", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_from_favorite(
-        id_film: int,
+        movie_id: int,
         current_user_id: int = Depends(get_current_user),
         db: AsyncSession = Depends(get_db)):
     stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
@@ -454,7 +454,7 @@ async def delete_from_favorite(
     stmt_existing_record = await db.execute(
         select(MovieFavoritesModel)
         .where(
-            MovieFavoritesModel.c.movie_id == id_film,
+            MovieFavoritesModel.c.movie_id == movie_id,
             MovieFavoritesModel.c.user_profile_id == existing_user_profile.id
         ))
     existing_record = stmt_existing_record.scalars().all()
@@ -464,7 +464,7 @@ async def delete_from_favorite(
     await db.execute(
         delete(MovieFavoritesModel)
         .where(
-            MovieFavoritesModel.c.movie_id == id_film,
+            MovieFavoritesModel.c.movie_id == movie_id,
             MovieFavoritesModel.c.user_profile_id == existing_user_profile.id
         )
     )
@@ -607,11 +607,11 @@ async def get_movies_by_genre(
     return await paginate(db, movies)
 
 
-@router.post("/movies/{id_film}/rating/",
+@router.post("/movies/{movie_id}/rating/",
              response_model=MovieRatingResponseSchema,
              status_code=status.HTTP_201_CREATED)
 async def add_rating(
-        id_film: int,
+        movie_id: int,
         data: MovieRatingRequestSchema,
         current_user_id: int = Depends(get_current_user),
         db: AsyncSession = Depends(get_db)):
@@ -620,7 +620,7 @@ async def add_rating(
     if not existing_user_profile:
         raise HTTPException(status_code=404, detail="User not found.")
 
-    stmt_movie = await db.execute(select(MovieModel).where(MovieModel.id == id_film))
+    stmt_movie = await db.execute(select(MovieModel).where(MovieModel.id == movie_id))
     existing_movie = stmt_movie.scalar_one_or_none()
     if not existing_movie:
         raise HTTPException(status_code=404, detail="Movie not found.")
@@ -647,9 +647,10 @@ async def add_rating(
 
     return MovieRatingResponseSchema.model_validate(rating)
 
-@router.delete("/movies/{id_film}/delete_rating/", status_code=status.HTTP_204_NO_CONTENT)
+
+@router.delete("/movies/{movie_id}/delete_rating/", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_rating(
-        id_film: int,
+        movie_id: int,
         current_user_id: int = Depends(get_current_user),
         db: AsyncSession = Depends(get_db)):
     stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
@@ -657,14 +658,14 @@ async def delete_rating(
     if not existing_user_profile:
         raise HTTPException(status_code=404, detail="User not found.")
 
-    stmt_movie = await db.execute(select(MovieModel).where(MovieModel.id == id_film))
+    stmt_movie = await db.execute(select(MovieModel).where(MovieModel.id == movie_id))
     existing_movie = stmt_movie.scalar_one_or_none()
     if not existing_movie:
         raise HTTPException(status_code=404, detail="Movie not found.")
 
     stmt_rating = await db.execute(select(RatingsModel)
                                    .where(RatingsModel.user_profile_id == existing_user_profile.id,
-                                          RatingsModel.movie_id == id_film))
+                                          RatingsModel.movie_id == movie_id))
     rating = stmt_rating.scalar_one_or_none()
     if not rating:
         raise HTTPException(status_code=404, detail="Your rating on this movie not found.")
