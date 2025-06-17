@@ -134,3 +134,23 @@ class MovieUserReactionResponseSchema(BaseModel):
 
 class MovieAddFavoriteResponseSchema(BaseModel):
     message: str
+
+
+class MovieRatingRequestSchema(BaseModel):
+    rating: int
+
+    @field_validator("rating", mode="before")
+    @classmethod
+    def check_rating(cls, value: int) -> int:
+        if value < 1 or value > 10:
+            raise ValueError("Rating must be between 1 and 10.")
+        return value
+
+class MovieRatingResponseSchema(BaseModel):
+    user_profile_id: int
+    movie_id: int
+    rating: int
+    added_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
