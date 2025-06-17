@@ -19,6 +19,10 @@ class GenresSchema(BaseModel):
     class Config:
         from_attributes = True
 
+class GenresMoviesCountSchema(GenresSchema):
+    movies_count: int
+
+    model_config = ConfigDict(from_attributes=True)
 
 class DirectorsSchema(BaseModel):
     id: int
