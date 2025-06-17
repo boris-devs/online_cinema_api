@@ -122,6 +122,7 @@ class RatingsModel(Base):
             raise ValueError("Rating must be between 1 and 10.")
         return value
 
+
 class CommentsModel(Base):
     __tablename__ = "comments"
 
@@ -131,6 +132,21 @@ class CommentsModel(Base):
     movie_id: Mapped[int] = mapped_column(ForeignKey("movies.id", ondelete="CASCADE"))
     user_profile: Mapped["UserProfileModel"] = relationship("UserProfileModel", back_populates="comments")
     movie: Mapped["MovieModel"] = relationship("MovieModel", back_populates="comments")
+    comment_likes: Mapped[list["CommentLikesModel"]] = relationship("CommentLikesModel", back_populates="comment")
+
+
+class CommentLikesModel(Base):
+    __tablename__ = "comment_likes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_profile_id: Mapped[int] = mapped_column(ForeignKey("user_profiles.id", ondelete="CASCADE"))
+    comment_id: Mapped[int] = mapped_column(ForeignKey("comments.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user_profile: Mapped["UserProfileModel"] = relationship("UserProfileModel", back_populates="comment_likes")
+    comment: Mapped["MovieModel"] = relationship("MovieModel", back_populates="comment_likes")
+
+    __table_args__ = (UniqueConstraint('user_profile_id', 'comment_id', name='_user_profile_comment_uc'),)
 
 
 class MovieModel(Base):
