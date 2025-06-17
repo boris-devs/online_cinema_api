@@ -4,7 +4,7 @@ from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi_pagination import add_pagination, Page
-from sqlalchemy import select, or_, insert, delete
+from sqlalchemy import select, or_, insert, delete, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi_pagination.ext.sqlalchemy import paginate
@@ -13,12 +13,13 @@ from starlette import status
 
 from database.models.accounts import UserProfileModel
 from database.models.movies import MovieModel, StarsModel, GenresModel, DirectorsModel, CommentsModel, ReactionsModel, \
-    ReactionType, MovieFavoritesModel
+    ReactionType, MovieFavoritesModel, RatingsModel, MovieGenresModel
 from schemas import MovieListSchema
 from database import get_db
 from schemas.movies import MovieDetailSchema, MovieCreateSchema, MovieCommentCreateResponseSchema, \
     MovieCommentCreateRequestSchema, MovieUserReactionResponseSchema, MovieCreateResponseSchema, \
-    MovieAddFavoriteResponseSchema, GenresSchema
+    MovieAddFavoriteResponseSchema,  MovieRatingRequestSchema, MovieRatingResponseSchema, \
+    GenresMoviesCountSchema
 from security.auth import get_current_user
 
 router = APIRouter()
@@ -539,10 +540,27 @@ async def get_favourite_movies(
     return await paginate(db, query)
 
 
-@router.get("/genres/", response_model=List[GenresSchema], status_code=status.HTTP_200_OK)
+@router.get("/genres/", response_model=List[GenresMoviesCountSchema], status_code=status.HTTP_200_OK)
 async def get_genres(db: AsyncSession = Depends(get_db)):
-    genres = await db.execute(select(GenresModel).order_by(GenresModel.name.desc()))
-    genres = genres.scalars().all()
+
+    query = (
+        select(
+            GenresModel.id,
+            GenresModel.name,
+            func.count(MovieGenresModel.c.movie_id).label('movies_count')
+        )
+        .select_from(GenresModel)
+        .join(
+            MovieGenresModel,
+            GenresModel.id == MovieGenresModel.c.genre_id,
+            isouter=True
+        )
+        .group_by(GenresModel.id, GenresModel.name)
+        .order_by(GenresModel.name)
+    )
+
+    result = await db.execute(query)
+    genres = result.all()
     return genres
 
 
@@ -551,11 +569,11 @@ async def get_movies_by_genre(
         name_genre: str,
         db: AsyncSession = Depends(get_db)):
     movies = select(MovieModel).options(joinedload(MovieModel.genres),
-                                   joinedload(MovieModel.directors),
-                                   joinedload(MovieModel.stars),
-                                   joinedload(MovieModel.reactions),
-                                   joinedload(MovieModel.comments)).where(MovieModel.genres.any(GenresModel.name == name_genre))
-
+                                        joinedload(MovieModel.directors),
+                                        joinedload(MovieModel.stars),
+                                        joinedload(MovieModel.reactions),
+                                        joinedload(MovieModel.comments)).where(
+        MovieModel.genres.any(GenresModel.name == name_genre))
 
     return await paginate(db, movies)
 
