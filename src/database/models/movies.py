@@ -123,6 +123,17 @@ class RatingsModel(Base):
         return value
 
 
+class NotificationsModel(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_profile_id: Mapped[int] = mapped_column(ForeignKey("user_profiles.id", ondelete="CASCADE"))
+    user_profile: Mapped["UserProfileModel"] = relationship("UserProfileModel", back_populates="notifications")
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    comment_id: Mapped[int] = mapped_column(ForeignKey("comments.id", ondelete="CASCADE"))
+    comment: Mapped["CommentsModel"] = relationship("CommentsModel", back_populates="notification")
+
+
 class CommentsModel(Base):
     __tablename__ = "comments"
 
@@ -138,7 +149,7 @@ class CommentsModel(Base):
     parent: Mapped[Optional["CommentsModel"]] = relationship("CommentsModel", remote_side=[id],
                                                              back_populates="replies")
     replies: Mapped[list["CommentsModel"]] = relationship("CommentsModel", back_populates="parent")
-
+    notification: Mapped["NotificationsModel"] = relationship("NotificationsModel", back_populates="comment")
 
 class CommentLikesModel(Base):
     __tablename__ = "comment_likes"
