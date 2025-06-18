@@ -292,6 +292,27 @@ async def like_comment(
     return CommentLikeResponseSchema.model_validate(record_like)
 
 
+@router.delete("/comments/{comment_id}/delete_like/", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_like_on_comment(comment_id: int,
+        current_user_id: int = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)):
+    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
+    existing_user_profile = stmt_user_profile.scalars().first()
+    if not existing_user_profile:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    existing_comment = await db.execute(
+        select(CommentLikesModel)
+        .where(CommentLikesModel.comment_id == comment_id,
+               CommentLikesModel.user_profile_id == existing_user_profile.id))
+    existing_comment = existing_comment.scalar_one_or_none()
+    if not existing_comment:
+        raise HTTPException(status_code=404, detail="Comment not found.")
+
+    await db.delete(existing_comment)
+    await db.commit()
+    return
+
 
 @router.post("/movies/{movie_id}/like/",
              response_model=MovieUserReactionResponseSchema,
