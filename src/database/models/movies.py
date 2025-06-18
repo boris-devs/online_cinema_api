@@ -130,9 +130,14 @@ class CommentsModel(Base):
     text: Mapped[str] = mapped_column(Text(), nullable=False)
     user_profile_id: Mapped[int] = mapped_column(ForeignKey("user_profiles.id", ondelete="CASCADE"))
     movie_id: Mapped[int] = mapped_column(ForeignKey("movies.id", ondelete="CASCADE"))
+    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("comments.id", ondelete="CASCADE"))
     user_profile: Mapped["UserProfileModel"] = relationship("UserProfileModel", back_populates="comments")
     movie: Mapped["MovieModel"] = relationship("MovieModel", back_populates="comments")
     comment_likes: Mapped[list["CommentLikesModel"]] = relationship("CommentLikesModel", back_populates="comment")
+
+    parent: Mapped[Optional["CommentsModel"]] = relationship("CommentsModel", remote_side=[id],
+                                                             back_populates="replies")
+    replies: Mapped[list["CommentsModel"]] = relationship("CommentsModel", back_populates="parent")
 
 
 class CommentLikesModel(Base):
