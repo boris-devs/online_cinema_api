@@ -16,10 +16,10 @@ from database.models.movies import MovieModel, StarsModel, GenresModel, Director
     ReactionType, MovieFavoritesModel, RatingsModel, MovieGenresModel, CommentLikesModel
 from schemas import MovieListSchema
 from database import get_db
-from schemas.movies import MovieDetailSchema, MovieCreateSchema, MovieCommentCreateResponseSchema, \
-    MovieCommentCreateRequestSchema, MovieUserReactionResponseSchema, MovieCreateResponseSchema, \
-    MovieAddFavoriteResponseSchema, MovieRatingRequestSchema, MovieRatingResponseSchema, \
-    GenresMoviesCountSchema, CommentLikeResponseSchema
+from schemas.movies import (MovieDetailSchema, MovieCreateSchema, MovieCommentCreateResponseSchema,
+                            MovieCommentCreateRequestSchema, MovieUserReactionResponseSchema, MovieCreateResponseSchema,
+                            MovieAddFavoriteResponseSchema, MovieRatingRequestSchema, MovieRatingResponseSchema,
+                            GenresMoviesCountSchema, CommentLikeResponseSchema, MovieCommentRepliesResponseSchema)
 from security.auth import get_current_user
 
 router = APIRouter()
@@ -263,7 +263,38 @@ async def delete_comment(
     return
 
 
-@router.post("/comments/{comment_id}/like/", response_model=CommentLikeResponseSchema, status_code=status.HTTP_201_CREATED)
+@router.post("/comments/{parent_comment_id}/replies/",
+             response_model=MovieCommentRepliesResponseSchema,
+             status_code=status.HTTP_201_CREATED)
+async def create_replies(
+        parent_comment_id: int,
+        comment_data: MovieCommentCreateRequestSchema,
+        current_user_id: int = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)):
+    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
+    existing_user_profile = stmt_user_profile.scalars().first()
+    if not existing_user_profile:
+        raise HTTPException(status_code=404, detail="User not found.")
+
+    parent_comment = await db.get(CommentsModel, parent_comment_id)
+    if not parent_comment:
+        raise HTTPException(status_code=404, detail="Comment not found.")
+
+    reply_comment = CommentsModel(
+        text=comment_data.text,
+        user_profile_id=existing_user_profile.id,
+        movie_id=parent_comment.movie_id,
+        parent_id=parent_comment_id
+    )
+    db.add(reply_comment)
+    await db.commit()
+    await db.refresh(reply_comment)
+
+    return MovieCommentRepliesResponseSchema.model_validate(reply_comment)
+
+
+@router.post("/comments/{comment_id}/like/", response_model=CommentLikeResponseSchema,
+             status_code=status.HTTP_201_CREATED)
 async def like_comment(
         comment_id: int,
         current_user_id: int = Depends(get_current_user),
@@ -294,8 +325,8 @@ async def like_comment(
 
 @router.delete("/comments/{comment_id}/delete_like/", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_like_on_comment(comment_id: int,
-        current_user_id: int = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)):
+                                 current_user_id: int = Depends(get_current_user),
+                                 db: AsyncSession = Depends(get_db)):
     stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
     existing_user_profile = stmt_user_profile.scalars().first()
     if not existing_user_profile:
