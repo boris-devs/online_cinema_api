@@ -119,6 +119,16 @@ class MovieCommentCreateResponseSchema(MovieCommentBaseSchema):
 
     model_config = ConfigDict(from_attributes=True)
 
+class MovieCommentRepliesResponseSchema(MovieCommentBaseSchema):
+    id: int
+    parent_id: int
+
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "field_order": ["id", "parent_id", "text", "user_profile_id", "movie_id"]
+        }
+    )
 
 class MovieUserReactionResponseSchema(BaseModel):
     message: str
