@@ -13,7 +13,7 @@ from starlette import status
 
 from database.models.accounts import UserProfileModel
 from database.models.movies import MovieModel, StarsModel, GenresModel, DirectorsModel, CommentsModel, ReactionsModel, \
-    ReactionType, MovieFavoritesModel, RatingsModel, MovieGenresModel, CommentLikesModel
+    ReactionType, MovieFavoritesModel, RatingsModel, MovieGenresModel, CommentLikesModel, NotificationsModel
 from schemas import MovieListSchema
 from database import get_db
 from schemas.movies import (MovieDetailSchema, MovieCreateSchema, MovieCommentCreateResponseSchema,
@@ -21,6 +21,18 @@ from schemas.movies import (MovieDetailSchema, MovieCreateSchema, MovieCommentCr
                             MovieAddFavoriteResponseSchema, MovieRatingRequestSchema, MovieRatingResponseSchema,
                             GenresMoviesCountSchema, CommentLikeResponseSchema, MovieCommentRepliesResponseSchema)
 from security.auth import get_current_user
+
+
+async def current_user_profile(
+        current_user_id: int = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
+    existing_user_profile = user_profile.scalar_one_or_none()
+    if not existing_user_profile:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return existing_user_profile
+
 
 router = APIRouter()
 
@@ -211,22 +223,16 @@ async def create_comment(
         movie_id: int,
         comment: MovieCommentCreateRequestSchema,
         db: AsyncSession = Depends(get_db),
-        current_user_id: int = Depends(get_current_user)
+        user_profile: UserProfileModel = Depends(current_user_profile)
 ):
-    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
-    existing_user_profile = stmt_user_profile.scalars().first()
-    if not existing_user_profile:
-        raise HTTPException(status_code=404, detail="User not found.")
-
-    stmt_movie = await db.execute(select(MovieModel).where(MovieModel.id == movie_id))
-    existing_movie = stmt_movie.scalars().first()
-    if not existing_movie:
+    movie = await db.get(MovieModel, movie_id)
+    if not movie:
         raise HTTPException(status_code=404, detail="Movie not found.")
 
     comment = CommentsModel(
         text=comment.text,
-        user_profile_id=existing_user_profile.id,
-        movie_id=existing_movie.id,
+        user_profile_id=user_profile.id,
+        movie_id=movie.id,
     )
     db.add(comment)
     await db.commit()
@@ -240,20 +246,14 @@ async def delete_comment(
         movie_id: int,
         comment_id: int,
         db: AsyncSession = Depends(get_db),
-        current_user_id: int = Depends(get_current_user)
+        user_profile: UserProfileModel = Depends(current_user_profile)
 ):
-    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
-    existing_user_profile = stmt_user_profile.scalars().first()
-    if not existing_user_profile:
-        raise HTTPException(status_code=404, detail="User not found.")
-
-    stmt_movie = await db.execute(select(MovieModel).where(MovieModel.id == movie_id))
-    existing_movie = stmt_movie.scalars().first()
-    if not existing_movie:
+    movie = await db.get(MovieModel, movie_id)
+    if not movie:
         raise HTTPException(status_code=404, detail="Movie not found.")
 
     stmt_comment = await db.execute(select(CommentsModel).where(CommentsModel.id == comment_id,
-                                                                CommentsModel.user_profile_id == existing_user_profile.id))
+                                                                CommentsModel.user_profile_id == user_profile.id))
     existing_comment = stmt_comment.scalars().first()
     if not existing_comment:
         raise HTTPException(status_code=404, detail="Comment not found.")
@@ -269,24 +269,29 @@ async def delete_comment(
 async def create_replies(
         parent_comment_id: int,
         comment_data: MovieCommentCreateRequestSchema,
-        current_user_id: int = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)):
-    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
-    existing_user_profile = stmt_user_profile.scalars().first()
-    if not existing_user_profile:
-        raise HTTPException(status_code=404, detail="User not found.")
-
+        user_profile: UserProfileModel = Depends(current_user_profile),
+        db: AsyncSession = Depends(get_db)
+):
     parent_comment = await db.get(CommentsModel, parent_comment_id)
     if not parent_comment:
         raise HTTPException(status_code=404, detail="Comment not found.")
 
     reply_comment = CommentsModel(
         text=comment_data.text,
-        user_profile_id=existing_user_profile.id,
+        user_profile_id=user_profile.id,
         movie_id=parent_comment.movie_id,
         parent_id=parent_comment_id
     )
     db.add(reply_comment)
+
+    if user_profile.id != parent_comment.user_profile_id:
+        notification = NotificationsModel(
+            user_profile_id=user_profile.id,
+            message=f"User {user_profile.first_name} {user_profile.last_name} answer on your comment.",
+            comment_id=parent_comment_id,
+        )
+        db.add(notification)
+
     await db.commit()
     await db.refresh(reply_comment)
 
@@ -297,26 +302,32 @@ async def create_replies(
              status_code=status.HTTP_201_CREATED)
 async def like_comment(
         comment_id: int,
-        current_user_id: int = Depends(get_current_user),
+        user_profile: UserProfileModel = Depends(current_user_profile),
         db: AsyncSession = Depends(get_db)):
-    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
-    existing_user_profile = stmt_user_profile.scalars().first()
-    if not existing_user_profile:
-        raise HTTPException(status_code=404, detail="User not found.")
+    existing_comment = await db.get(CommentsModel, comment_id)
+    if not existing_comment:
+        raise HTTPException(status_code=404, detail="Comment not found.")
 
-    existing_comment = await db.execute(
+    existing_like_comment = await db.execute(
         select(CommentLikesModel)
         .where(CommentLikesModel.comment_id == comment_id,
-               CommentLikesModel.user_profile_id == existing_user_profile.id))
-    existing_comment = existing_comment.scalar_one_or_none()
-    if existing_comment:
+               CommentLikesModel.user_profile_id == user_profile.id))
+    existing_like_comment = existing_like_comment.scalar_one_or_none()
+    if existing_like_comment:
         raise HTTPException(status_code=409, detail="You have already liked this comment.")
 
     record_like = CommentLikesModel(
         comment_id=comment_id,
-        user_profile_id=existing_user_profile.id
+        user_profile_id=user_profile.id
     )
     db.add(record_like)
+
+    if user_profile.id != existing_comment.user_profile_id:
+        notification = NotificationsModel(
+            user_profile_id=user_profile.id,
+            message=f"User {user_profile.first_name} {user_profile.last_name} liked your comment.",
+            comment_id=comment_id)
+        db.add(notification)
     await db.commit()
     await db.refresh(record_like)
 
@@ -325,17 +336,12 @@ async def like_comment(
 
 @router.delete("/comments/{comment_id}/delete_like/", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_like_on_comment(comment_id: int,
-                                 current_user_id: int = Depends(get_current_user),
+                                 user_profile: UserProfileModel = Depends(current_user_profile),
                                  db: AsyncSession = Depends(get_db)):
-    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
-    existing_user_profile = stmt_user_profile.scalars().first()
-    if not existing_user_profile:
-        raise HTTPException(status_code=404, detail="User not found.")
-
     existing_comment = await db.execute(
         select(CommentLikesModel)
         .where(CommentLikesModel.comment_id == comment_id,
-               CommentLikesModel.user_profile_id == existing_user_profile.id))
+               CommentLikesModel.user_profile_id == user_profile.id))
     existing_comment = existing_comment.scalar_one_or_none()
     if not existing_comment:
         raise HTTPException(status_code=404, detail="Comment not found.")
@@ -350,21 +356,15 @@ async def delete_like_on_comment(comment_id: int,
              status_code=status.HTTP_201_CREATED)
 async def like_movie(
         movie_id: int,
-        current_user_id: int = Depends(get_current_user),
+        user_profile: UserProfileModel = Depends(current_user_profile),
         db: AsyncSession = Depends(get_db)):
-    stmt = await db.execute(select(MovieModel).where(MovieModel.id == movie_id))
-    existing_movie = stmt.scalars().first()
-    if not existing_movie:
+    movie = await db.get(MovieModel, movie_id)
+    if not movie:
         raise HTTPException(status_code=404, detail="Movie not found.")
 
-    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
-    existing_user_profile = stmt_user_profile.scalars().first()
-    if not existing_user_profile:
-        raise HTTPException(status_code=404, detail="User not found.")
-
     stmt_reaction = await db.execute(select(ReactionsModel)
-                                     .where(ReactionsModel.user_profile_id == existing_user_profile.id,
-                                            ReactionsModel.movie_id == existing_movie.id))
+                                     .where(ReactionsModel.user_profile_id == user_profile.id,
+                                            ReactionsModel.movie_id == movie.id))
     existing_reaction = stmt_reaction.scalars().first()
 
     if existing_reaction:
@@ -380,8 +380,8 @@ async def like_movie(
 
     else:
         like = ReactionsModel(
-            user_profile_id=existing_user_profile.id,
-            movie_id=existing_movie.id,
+            user_profile_id=user_profile.id,
+            movie_id=movie.id,
             reaction_type=ReactionType.LIKE
         )
         db.add(like)
@@ -395,21 +395,15 @@ async def like_movie(
              response_model=MovieUserReactionResponseSchema,
              status_code=status.HTTP_201_CREATED)
 async def dislike_movie(movie_id: int,
-                        current_user_id: int = Depends(get_current_user),
+                        user_profile: UserProfileModel = Depends(current_user_profile),
                         db: AsyncSession = Depends(get_db)):
-    stmt = await db.execute(select(MovieModel).where(MovieModel.id == movie_id))
-    existing_movie = stmt.scalars().first()
-    if not existing_movie:
+    movie = await db.get(MovieModel, movie_id)
+    if not movie:
         raise HTTPException(status_code=404, detail="Movie not found.")
 
-    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
-    existing_user_profile = stmt_user_profile.scalars().first()
-    if not existing_user_profile:
-        raise HTTPException(status_code=404, detail="User not found.")
-
     stmt_reaction = await db.execute(select(ReactionsModel)
-                                     .where(ReactionsModel.user_profile_id == existing_user_profile.id,
-                                            ReactionsModel.movie_id == existing_movie.id))
+                                     .where(ReactionsModel.user_profile_id == user_profile.id,
+                                            ReactionsModel.movie_id == movie.id))
     existing_reaction = stmt_reaction.scalars().first()
 
     if existing_reaction:
@@ -424,8 +418,8 @@ async def dislike_movie(movie_id: int,
 
     else:
         dislike = ReactionsModel(
-            user_profile_id=existing_user_profile.id,
-            movie_id=existing_movie.id,
+            user_profile_id=user_profile.id,
+            movie_id=movie.id,
             reaction_type=ReactionType.DISLIKE
         )
         db.add(dislike)
@@ -437,21 +431,15 @@ async def dislike_movie(movie_id: int,
 
 @router.delete("/movies/{movie_id}/delete_reaction/", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_reaction(movie_id: int,
-                          current_user_id: int = Depends(get_current_user),
+                          user_profile: UserProfileModel = Depends(current_user_profile),
                           db: AsyncSession = Depends(get_db)):
-    stmt = await db.execute(select(MovieModel).where(MovieModel.id == movie_id))
-    existing_movie = stmt.scalars().first()
-    if not existing_movie:
+    movie = await db.get(MovieModel, movie_id)
+    if not movie:
         raise HTTPException(status_code=404, detail="Movie not found.")
 
-    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
-    existing_user_profile = stmt_user_profile.scalars().first()
-    if not existing_user_profile:
-        raise HTTPException(status_code=404, detail="User not found.")
-
     stmt_reaction = await db.execute(select(ReactionsModel)
-                                     .where(ReactionsModel.user_profile_id == existing_user_profile.id,
-                                            ReactionsModel.movie_id == existing_movie.id))
+                                     .where(ReactionsModel.user_profile_id == user_profile.id,
+                                            ReactionsModel.movie_id == movie.id))
     existing_reaction = stmt_reaction.scalars().first()
     if not existing_reaction:
         raise HTTPException(status_code=404, detail="Reaction not found.")
@@ -466,18 +454,14 @@ async def delete_reaction(movie_id: int,
              status_code=status.HTTP_201_CREATED)
 async def add_to_favorite(
         movie_id: int,
-        current_user_id: int = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)):
-    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
-    existing_user_profile = stmt_user_profile.scalars().first()
-    if not existing_user_profile:
-        raise HTTPException(status_code=404, detail="User not found.")
-
+        user_profile: UserProfileModel = Depends(current_user_profile),
+        db: AsyncSession = Depends(get_db)
+):
     stmt_existing_record = await db.execute(
         select(MovieFavoritesModel)
         .where(
             MovieFavoritesModel.c.movie_id == movie_id,
-            MovieFavoritesModel.c.user_profile_id == existing_user_profile.id
+            MovieFavoritesModel.c.user_profile_id == user_profile.id
         ))
     existing_record = stmt_existing_record.scalars().all()
     if existing_record:
@@ -486,7 +470,7 @@ async def add_to_favorite(
     await db.execute(
         insert(MovieFavoritesModel)
         .values(movie_id=movie_id,
-                user_profile_id=existing_user_profile.id)
+                user_profile_id=user_profile.id)
     )
     await db.commit()
 
@@ -496,18 +480,14 @@ async def add_to_favorite(
 @router.delete("/movies/{movie_id}/delete_favorite/", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_from_favorite(
         movie_id: int,
-        current_user_id: int = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)):
-    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
-    existing_user_profile = stmt_user_profile.scalars().first()
-    if not existing_user_profile:
-        raise HTTPException(status_code=404, detail="User not found.")
-
+        user_profile: UserProfileModel = Depends(current_user_profile),
+        db: AsyncSession = Depends(get_db)
+):
     stmt_existing_record = await db.execute(
         select(MovieFavoritesModel)
         .where(
             MovieFavoritesModel.c.movie_id == movie_id,
-            MovieFavoritesModel.c.user_profile_id == existing_user_profile.id
+            MovieFavoritesModel.c.user_profile_id == user_profile.id
         ))
     existing_record = stmt_existing_record.scalars().all()
     if not existing_record:
@@ -517,7 +497,7 @@ async def delete_from_favorite(
         delete(MovieFavoritesModel)
         .where(
             MovieFavoritesModel.c.movie_id == movie_id,
-            MovieFavoritesModel.c.user_profile_id == existing_user_profile.id
+            MovieFavoritesModel.c.user_profile_id == user_profile.id
         )
     )
     await db.commit()
@@ -527,7 +507,7 @@ async def delete_from_favorite(
 @router.get("/movies/favourites/", response_model=Page[MovieListSchema])
 async def get_favourite_movies(
         db: AsyncSession = Depends(get_db),
-        current_user_id: int = Depends(get_current_user),
+        user_profile: UserProfileModel = Depends(current_user_profile),
         year: Optional[int] = Query(None, description="Filter by exact release year"),
         year_min: Optional[int] = Query(None, description="Minimum release year"),
         year_max: Optional[int] = Query(None, description="Maximum release year"),
@@ -544,16 +524,11 @@ async def get_favourite_movies(
             description="Sort by field and direction"
         ),
 ):
-    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
-    existing_user_profile = stmt_user_profile.scalars().first()
-    if not existing_user_profile:
-        raise HTTPException(status_code=404, detail="User not found.")
-
     query = (select(MovieModel).join(
         MovieFavoritesModel,
         MovieFavoritesModel.c.movie_id == MovieModel.id
     ).where(
-        MovieFavoritesModel.c.user_profile_id == existing_user_profile.id
+        MovieFavoritesModel.c.user_profile_id == user_profile.id
     )
     .options(
         joinedload(MovieModel.genres),
@@ -665,20 +640,15 @@ async def get_movies_by_genre(
 async def add_rating(
         movie_id: int,
         data: MovieRatingRequestSchema,
-        current_user_id: int = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)):
-    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
-    existing_user_profile = stmt_user_profile.scalar_one_or_none()
-    if not existing_user_profile:
-        raise HTTPException(status_code=404, detail="User not found.")
-
-    stmt_movie = await db.execute(select(MovieModel).where(MovieModel.id == movie_id))
-    existing_movie = stmt_movie.scalar_one_or_none()
-    if not existing_movie:
+        user_profile: UserProfileModel = Depends(current_user_profile),
+        db: AsyncSession = Depends(get_db)
+):
+    movie = await db.get(MovieModel, movie_id)
+    if not movie:
         raise HTTPException(status_code=404, detail="Movie not found.")
 
-    stmt_rating = await db.execute(select(RatingsModel).where(RatingsModel.user_profile_id == existing_user_profile.id,
-                                                              RatingsModel.movie_id == existing_movie.id))
+    stmt_rating = await db.execute(select(RatingsModel).where(RatingsModel.user_profile_id == user_profile.id,
+                                                              RatingsModel.movie_id == movie.id))
     existing_rating = stmt_rating.scalar_one_or_none()
     if existing_rating:
         existing_rating.rating = data.rating
@@ -688,8 +658,8 @@ async def add_rating(
         return existing_rating
 
     rating = RatingsModel(
-        user_profile_id=existing_user_profile.id,
-        movie_id=existing_movie.id,
+        user_profile_id=user_profile.id,
+        movie_id=movie.id,
         rating=data.rating
     )
 
@@ -703,20 +673,15 @@ async def add_rating(
 @router.delete("/movies/{movie_id}/delete_rating/", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_rating(
         movie_id: int,
-        current_user_id: int = Depends(get_current_user),
-        db: AsyncSession = Depends(get_db)):
-    stmt_user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
-    existing_user_profile = stmt_user_profile.scalar_one_or_none()
-    if not existing_user_profile:
-        raise HTTPException(status_code=404, detail="User not found.")
-
-    stmt_movie = await db.execute(select(MovieModel).where(MovieModel.id == movie_id))
-    existing_movie = stmt_movie.scalar_one_or_none()
-    if not existing_movie:
+        user_profile: UserProfileModel = Depends(current_user_profile),
+        db: AsyncSession = Depends(get_db)
+):
+    movie = await db.get(MovieModel, movie_id)
+    if not movie:
         raise HTTPException(status_code=404, detail="Movie not found.")
 
     stmt_rating = await db.execute(select(RatingsModel)
-                                   .where(RatingsModel.user_profile_id == existing_user_profile.id,
+                                   .where(RatingsModel.user_profile_id == user_profile.id,
                                           RatingsModel.movie_id == movie_id))
     rating = stmt_rating.scalar_one_or_none()
     if not rating:
