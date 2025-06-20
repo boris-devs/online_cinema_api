@@ -11,15 +11,18 @@ from fastapi_pagination.ext.sqlalchemy import paginate
 from sqlalchemy.orm import selectinload, joinedload
 from starlette import status
 
-from database.models.accounts import UserProfileModel
+from database.models.accounts import UserProfileModel, UserModel
 from database.models.movies import MovieModel, StarsModel, GenresModel, DirectorsModel, CommentsModel, ReactionsModel, \
-    ReactionType, MovieFavoritesModel, RatingsModel, MovieGenresModel, CommentLikesModel, NotificationsModel
+    ReactionType, MovieFavoritesModel, RatingsModel, MovieGenresModel, CommentLikesModel, NotificationsModel, \
+    MovieStarsModel, MovieDirectorsModel
 from schemas import MovieListSchema
 from database import get_db
 from schemas.movies import (MovieDetailSchema, MovieCreateSchema, MovieCommentCreateResponseSchema,
                             MovieCommentCreateRequestSchema, MovieUserReactionResponseSchema, MovieCreateResponseSchema,
                             MovieAddFavoriteResponseSchema, MovieRatingRequestSchema, MovieRatingResponseSchema,
-                            GenresMoviesCountSchema, CommentLikeResponseSchema, MovieCommentRepliesResponseSchema)
+                            GenresMoviesCountSchema, CommentLikeResponseSchema, MovieCommentRepliesResponseSchema,
+                            GenresDetailSchema, GenresSchema, StarSchema, StarsDetailSchema, DirectorsDetailSchema,
+                            DirectorSchema)
 from security.auth import get_current_user
 
 
@@ -28,6 +31,22 @@ async def current_user_profile(
         db: AsyncSession = Depends(get_db)
 ):
     user_profile = await db.execute(select(UserProfileModel).where(UserProfileModel.user_id == current_user_id))
+    existing_user_profile = user_profile.scalar_one_or_none()
+    if not existing_user_profile:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return existing_user_profile
+
+
+async def current_moderator_profile(
+        current_user_id: int = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    user_profile = await db.execute(select(UserProfileModel)
+    .join(UserModel)
+    .where(
+        UserProfileModel.user_id == current_user_id,
+        or_(UserModel.group_id == 2,
+            UserModel.group_id == 3)))
     existing_user_profile = user_profile.scalar_one_or_none()
     if not existing_user_profile:
         raise HTTPException(status_code=404, detail="User not found.")
@@ -153,7 +172,9 @@ async def get_movie_detail(movie_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/movies/add/", response_model=MovieCreateResponseSchema, status_code=status.HTTP_201_CREATED)
-async def add_movie(movie: MovieCreateSchema, db: AsyncSession = Depends(get_db)):
+async def add_movie(movie: MovieCreateSchema,
+                    _moderator_profile: UserProfileModel = Depends(current_moderator_profile),
+                    db: AsyncSession = Depends(get_db)):
     stmt = await db.execute(select(MovieModel).where(MovieModel.name == movie.name))
     result = stmt.scalars().first()
     if result:
@@ -215,6 +236,112 @@ async def add_movie(movie: MovieCreateSchema, db: AsyncSession = Depends(get_db)
     except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Invalid input data.")
+
+
+@router.post("/genres/add/", response_model=GenresDetailSchema, status_code=status.HTTP_201_CREATED)
+async def create_genre(
+        genre: GenresSchema,
+        _moderator_profile: UserProfileModel = Depends(current_moderator_profile),
+        db: AsyncSession = Depends(get_db)
+):
+    existing_genre = await db.execute(select(GenresModel).where(GenresModel.name == genre.name))
+    existing_genre = existing_genre.scalar_one_or_none()
+    if existing_genre:
+        raise HTTPException(status_code=400, detail="Genre already exists.")
+    new_genre = GenresModel(name=genre.name)
+    db.add(new_genre)
+    await db.commit()
+    return GenresDetailSchema.model_validate(new_genre)
+
+
+@router.delete("/genres/{genre_id}/delete/", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_genre(
+        genre_id: int,
+        _moderator_profile: UserProfileModel = Depends(current_moderator_profile),
+        db: AsyncSession = Depends(get_db)
+):
+    genre = await db.get(GenresModel, genre_id)
+    if not genre:
+        raise HTTPException(status_code=400, detail="Genre not found.")
+    current_genre_in_movies = await db.execute(select(MovieGenresModel).where(MovieGenresModel.c.genre_id == genre_id))
+    current_genre_in_movies = current_genre_in_movies.scalars().first()
+    if current_genre_in_movies:
+        raise HTTPException(status_code=400, detail="The current genre corresponds to one or more movies")
+
+    await db.delete(genre)
+    await db.commit()
+    return
+
+
+@router.post("/stars/create/", response_model=StarsDetailSchema, status_code=status.HTTP_201_CREATED)
+async def create_star(
+        star: StarSchema,
+        _moderator_profile: UserProfileModel = Depends(current_moderator_profile),
+        db: AsyncSession = Depends(get_db)
+):
+    existing_star = await db.execute(select(StarsModel).where(StarsModel.name == star.name))
+    existing_star = existing_star.scalar_one_or_none()
+    if existing_star:
+        raise HTTPException(status_code=400, detail="Star already exists.")
+    star = StarsModel(name=star.name)
+    db.add(star)
+    await db.commit()
+    return StarsDetailSchema.model_validate(star)
+
+
+@router.delete("/stars/{star_id}/delete/", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_star(
+        star_id: int,
+        _moderator_profile: UserProfileModel = Depends(current_moderator_profile),
+        db: AsyncSession = Depends(get_db)
+):
+    star = await db.get(StarsModel, star_id)
+    if not star:
+        raise HTTPException(status_code=400, detail="Star not found.")
+    current_star_in_movies = await db.execute(select(MovieStarsModel).where(MovieStarsModel.c.star_id == star_id))
+    current_star_in_movies = current_star_in_movies.scalars().first()
+    if current_star_in_movies:
+        raise HTTPException(status_code=400, detail="The current star corresponds to one or more movies")
+
+    await db.delete(star)
+    await db.commit()
+    return
+
+
+@router.post("/directors/create/", response_model=DirectorsDetailSchema, status_code=status.HTTP_201_CREATED)
+async def create_director(
+        director: DirectorSchema,
+        _moderator_profile: UserProfileModel = Depends(current_moderator_profile),
+        db: AsyncSession = Depends(get_db)
+):
+    existing_director = await db.execute(select(DirectorsModel).where(DirectorsModel.name == director.name))
+    existing_director = existing_director.scalar_one_or_none()
+    if existing_director:
+        raise HTTPException(status_code=400, detail="Director already exists.")
+    director = DirectorsModel(name=director.name)
+    db.add(director)
+    await db.commit()
+    return DirectorsDetailSchema.model_validate(director)
+
+
+@router.delete("/directors/{director_id}/delete/", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_director(
+        director_id: int,
+        _moderator_profile: UserProfileModel = Depends(current_moderator_profile),
+        db: AsyncSession = Depends(get_db)
+):
+    director = await db.get(DirectorsModel, director_id)
+    if not director:
+        raise HTTPException(status_code=400, detail="Director not found.")
+
+    current_director_in_movie = await db.execute(
+        select(MovieDirectorsModel).where(MovieDirectorsModel.c.director_id == director_id))
+    current_director_in_movie = current_director_in_movie.scalars().first()
+    if current_director_in_movie:
+        raise HTTPException(status_code=400, detail="The current star corresponds to one or more movies")
+    await db.delete(director)
+    await db.commit()
+    return
 
 
 @router.post("/movies/{movie_id}/comment/", response_model=MovieCommentCreateResponseSchema,

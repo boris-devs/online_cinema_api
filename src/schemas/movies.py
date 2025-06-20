@@ -1,30 +1,52 @@
 from datetime import datetime
 from typing import Optional, List
 
+from fastapi.params import Query
 from pydantic import BaseModel, field_validator, Field, ConfigDict
 import uuid
 
+class StarSchema(BaseModel):
+    name: str = Query(min_length=1, max_length=20)
 
-class StarsSchema(BaseModel):
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        return value.title()
+
+class StarsDetailSchema(StarSchema):
     id: int
-    name: str
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class GenresSchema(BaseModel):
+    name: str = Query(min_length=1, max_length=20)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        return value.title()
+
+class GenresDetailSchema(GenresSchema):
     id: int
-    name: str
 
     model_config = ConfigDict(from_attributes=True)
 
-class GenresMoviesCountSchema(GenresSchema):
+class GenresMoviesCountSchema(GenresDetailSchema):
     movies_count: int
 
     model_config = ConfigDict(from_attributes=True)
 
-class DirectorsSchema(BaseModel):
-    id: int
+
+class DirectorSchema(BaseModel):
+    name: str = Query(min_length=1, max_length=40)
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        return value.title()
+
+class DirectorsDetailSchema(DirectorSchema):
     name: str
 
     model_config = ConfigDict(from_attributes=True)
@@ -63,9 +85,9 @@ class MovieBaseSchema(BaseModel):
 
 class MovieListSchema(MovieBaseSchema):
     id: int
-    stars: List[StarsSchema]
-    genres: List[GenresSchema]
-    directors: List[DirectorsSchema]
+    stars: List[StarsDetailSchema]
+    genres: List[GenresDetailSchema]
+    directors: List[DirectorsDetailSchema]
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -73,9 +95,9 @@ class MovieListSchema(MovieBaseSchema):
 class MovieDetailSchema(MovieBaseSchema):
     id: int
     uuid: uuid.UUID
-    stars: List[StarsSchema]
-    genres: List[GenresSchema]
-    directors: List[DirectorsSchema]
+    stars: List[StarsDetailSchema]
+    genres: List[GenresDetailSchema]
+    directors: List[DirectorsDetailSchema]
 
     class Config:
         from_attributes = True
@@ -95,9 +117,9 @@ class MovieCreateSchema(MovieBaseSchema):
 class MovieCreateResponseSchema(MovieBaseSchema):
     id: int
     uuid: uuid.UUID
-    stars: List[StarsSchema]
-    genres: List[GenresSchema]
-    directors: List[DirectorsSchema]
+    stars: List[StarsDetailSchema]
+    genres: List[GenresDetailSchema]
+    directors: List[DirectorsDetailSchema]
 
     model_config = ConfigDict(from_attributes=True)
 
