@@ -12,7 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from database import Base
 
 if TYPE_CHECKING:
-    from database.models.accounts import UserProfileModel
+    from database import UserProfileModel, CartItemsModel
 
 
 class ReactionType(enum.Enum):
@@ -206,3 +206,6 @@ class MovieModel(Base):
     reactions: Mapped[list["ReactionsModel"]] = relationship("ReactionsModel", back_populates="movie")
 
     comments: Mapped[list["CommentsModel"]] = relationship("CommentsModel", back_populates="movie")
+
+    in_carts: Mapped[list["CartItemsModel"]] = relationship("CartItemsModel",
+                                                              back_populates="movie")

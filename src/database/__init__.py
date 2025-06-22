@@ -7,8 +7,22 @@ from database.models.accounts import (
     UserModel,
     UserGroupModel,
     UserGroupEnum,
+    UserProfileModel,
     ActivationTokenModel,
     PasswordResetTokenModel,
     RefreshTokenModel)
+
+from database.models.movies import (
+    ReactionsModel,
+    CommentsModel,
+    MovieModel,
+    RatingsModel,
+    CommentLikesModel,
+    NotificationsModel)
+
+from database.models.shopping_cart import (
+    CartsModel,
+    CartItemsModel
+)
 
 from database.validators import accounts as accounts_validators

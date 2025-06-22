@@ -9,8 +9,8 @@ from database import Base, account_validators
 from security import verify_password, hash_password, generate_secure_token
 
 if TYPE_CHECKING:
-    from database.models.movies import (ReactionsModel, CommentsModel, MovieModel,
-                                        RatingsModel, CommentLikesModel, NotificationsModel)
+    from database import (ReactionsModel, CommentsModel, MovieModel,
+                          RatingsModel, CommentLikesModel, NotificationsModel)
 
 
 class UserGroupEnum(str, enum.Enum):
@@ -135,7 +135,8 @@ class UserProfileModel(Base):
                                                                back_populates="in_favorites")
     ratings: Mapped[list["RatingsModel"]] = relationship("RatingsModel", back_populates="user_profile")
     comment_likes: Mapped[list["CommentLikesModel"]] = relationship("CommentLikesModel", back_populates="user_profile")
-    notifications: Mapped[list["NotificationsModel"]] = relationship("NotificationsModel", back_populates="user_profile")
+    notifications: Mapped[list["NotificationsModel"]] = relationship("NotificationsModel",
+                                                                     back_populates="user_profile")
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
