@@ -15,7 +15,7 @@ from database import (
     UserGroupEnum,
     ActivationTokenModel,
     PasswordResetTokenModel,
-    RefreshTokenModel
+    RefreshTokenModel, CartsModel
 )
 from database.models.accounts import UserProfileModel
 from exceptions import BaseSecurityError
@@ -120,6 +120,9 @@ async def register_user(
 
         user_profile = UserProfileModel(user_id=new_user.id)
         db.add(user_profile)
+
+        cart = CartsModel(user=new_user)
+        db.add(cart)
 
         activation_token = ActivationTokenModel(user_id=new_user.id)
         db.add(activation_token)
