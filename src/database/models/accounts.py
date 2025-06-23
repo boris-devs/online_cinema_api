@@ -10,7 +10,7 @@ from security import verify_password, hash_password, generate_secure_token
 
 if TYPE_CHECKING:
     from database import (ReactionsModel, CommentsModel, MovieModel,
-                          RatingsModel, CommentLikesModel, NotificationsModel)
+                          RatingsModel, CommentLikesModel, NotificationsModel, CartsModel)
 
 
 class UserGroupEnum(str, enum.Enum):
@@ -52,6 +52,11 @@ class UserModel(Base):
 
     group_id: Mapped[int] = mapped_column(ForeignKey("user_groups.id", ondelete="CASCADE"), nullable=False)
     group: Mapped["UserGroupModel"] = relationship("UserGroupModel", back_populates="users")
+
+    cart_id: Mapped[int] = mapped_column(ForeignKey("carts.id", ondelete="RESTRICT"),
+                                         unique=True,
+                                         nullable=False)
+    cart: Mapped["CartsModel"] = relationship("CartsModel", back_populates="user", uselist=False)
 
     activation_token: Mapped[Optional["ActivationTokenModel"]] = relationship(
         "ActivationTokenModel",

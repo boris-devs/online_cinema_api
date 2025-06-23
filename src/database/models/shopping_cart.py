@@ -7,13 +7,13 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from database import Base
 
 if TYPE_CHECKING:
-    from database import MovieModel
+    from database import MovieModel, UserModel
 
 class CartsModel(Base):
     __tablename__ = 'carts'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete="RESTRICT"), nullable=False)
+    user: Mapped["UserModel"] = relationship("UserModel", back_populates="cart", uselist=False)
     items: Mapped[list["CartItemsModel"]] = relationship("CartItemsModel", back_populates="cart")
 
 
