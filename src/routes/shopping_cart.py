@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload, load_only
+from sqlalchemy.orm import selectinload, load_only, joinedload
 from starlette import status
 
-from database import get_db, UserModel, MovieModel, CartItemsModel, CartsModel
+from database import get_db, UserModel, MovieModel, CartItemsModel, CartsModel, UserGroupModel
 from schemas.shopping_cart import CartAddMovieResponseSchema, CartMoviesResponseSchema
-from security.auth import get_current_user
+from security.auth import get_current_user, current_user_or_prompt
 
 router = APIRouter()
 
@@ -66,12 +66,14 @@ async def delete_from_cart(
 
 
 @router.get("/all/", response_model=list[CartMoviesResponseSchema], status_code=status.HTTP_200_OK)
-async def list_cart(current_user: int = Depends(get_current_user),
-                    db: AsyncSession = Depends(get_db)
-                    ):
+async def list_cart(
+        current_user: int = Depends(current_user_or_prompt),
+        db: AsyncSession = Depends(get_db)
+):
+    if not current_user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="To get access to cart you need to log in or register.")
     user = await db.get(UserModel, current_user)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
 
     movies_cart = await db.execute(
         select(MovieModel)
@@ -85,3 +87,26 @@ async def list_cart(current_user: int = Depends(get_current_user),
     movies = movies_cart.scalars().all()
     return [CartMoviesResponseSchema.model_validate(movie) for movie in movies]
 
+
+@router.get("/user/{user_id}/all/", response_model=list[CartMoviesResponseSchema])
+async def list_users_cart(
+        user_id: int,
+        current_user: int = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)
+):
+    moderator_user = await db.execute(select(UserModel).where(UserModel.id == current_user)
+                                      .options(joinedload(UserModel.group)))
+
+    moderator_user = moderator_user.scalar_one_or_none()
+    if moderator_user.group.name != "moderator":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="You do not have permissions for this action.")
+    user_cart = await db.execute(
+        select(MovieModel)
+        .options(
+            load_only(MovieModel.name, MovieModel.price, MovieModel.year),
+            selectinload(MovieModel.genres))
+        .join(CartItemsModel).where(CartItemsModel.cart_id == user_id))
+
+    user_cart = user_cart.scalars().all()
+    return [CartMoviesResponseSchema.model_validate(movie) for movie in user_cart]
