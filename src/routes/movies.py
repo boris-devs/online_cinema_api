@@ -16,7 +16,7 @@ from database.models.movies import MovieModel, StarsModel, GenresModel, Director
     ReactionType, MovieFavoritesModel, RatingsModel, MovieGenresModel, CommentLikesModel, NotificationsModel, \
     MovieStarsModel, MovieDirectorsModel
 from schemas import MovieListSchema
-from database import get_db
+from database import get_db, CartItemsModel, UserGroupModel, UserGroupEnum
 from schemas.movies import (MovieDetailSchema, MovieCreateSchema, MovieCommentCreateResponseSchema,
                             MovieCommentCreateRequestSchema, MovieUserReactionResponseSchema, MovieCreateResponseSchema,
                             MovieAddFavoriteResponseSchema, MovieRatingRequestSchema, MovieRatingResponseSchema,
@@ -236,6 +236,44 @@ async def add_movie(movie: MovieCreateSchema,
     except IntegrityError:
         await db.rollback()
         raise HTTPException(status_code=400, detail="Invalid input data.")
+
+
+@router.delete("/movie/{movie_id}/delete/", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_movie(
+        movie_id: int,
+        moderator_profile: UserProfileModel = Depends(current_moderator_profile),
+        db: AsyncSession = Depends(get_db)
+):
+    movie = await db.get(MovieModel, movie_id)
+    if not movie:
+        raise HTTPException(status_code=404, detail="Movie not found.")
+    count_in_carts = await db.execute(select(func.count()).where(CartItemsModel.movie_id == movie.id))
+    count_in_carts = count_in_carts.scalar()
+    if count_in_carts > 0:
+        moderators = await db.execute(
+            select(UserModel).options(
+                selectinload(UserModel.profile))
+            .join(UserGroupModel)
+            .where(UserGroupModel.name == UserGroupEnum.moderator)
+        )
+        moderators = moderators.scalars().all()
+
+        message = (f"{moderator_profile.first_name} {moderator_profile.first_name} delete "
+                   f"movie {movie.name} but movie exists in {count_in_carts} carts.")
+        notifications_data = [{
+            "user_profile_id": moderator.profile.id,
+            "movie_id": movie.id,
+            "message": message,
+            "movie_title": movie.name
+        } for moderator in moderators]
+
+        if notifications_data:
+            await db.execute(insert(NotificationsModel).values(notifications_data))
+
+    await db.execute(delete(CartItemsModel).where(CartItemsModel.movie_id == movie.id))
+    await db.delete(movie)
+    await db.commit()
+    return
 
 
 @router.post("/genres/add/", response_model=GenresDetailSchema, status_code=status.HTTP_201_CREATED)
