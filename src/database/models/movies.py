@@ -130,8 +130,11 @@ class NotificationsModel(Base):
     user_profile_id: Mapped[int] = mapped_column(ForeignKey("user_profiles.id", ondelete="CASCADE"))
     user_profile: Mapped["UserProfileModel"] = relationship("UserProfileModel", back_populates="notifications")
     message: Mapped[str] = mapped_column(Text, nullable=False)
-    comment_id: Mapped[int] = mapped_column(ForeignKey("comments.id", ondelete="CASCADE"))
+    comment_id: Mapped[int] = mapped_column(ForeignKey("comments.id", ondelete="CASCADE"), nullable=True)
     comment: Mapped["CommentsModel"] = relationship("CommentsModel", back_populates="notification")
+    movie_id: Mapped[Optional[int]] = mapped_column(ForeignKey("movies.id", ondelete="SET NULL"), nullable=True)
+    movie_title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class CommentsModel(Base):
@@ -150,6 +153,8 @@ class CommentsModel(Base):
                                                              back_populates="replies")
     replies: Mapped[list["CommentsModel"]] = relationship("CommentsModel", back_populates="parent")
     notification: Mapped["NotificationsModel"] = relationship("NotificationsModel", back_populates="comment")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
 
 class CommentLikesModel(Base):
     __tablename__ = "comment_likes"
@@ -208,4 +213,4 @@ class MovieModel(Base):
     comments: Mapped[list["CommentsModel"]] = relationship("CommentsModel", back_populates="movie")
 
     in_carts: Mapped[list["CartItemsModel"]] = relationship("CartItemsModel",
-                                                              back_populates="movie")
+                                                            back_populates="movie")
