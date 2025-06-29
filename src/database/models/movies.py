@@ -6,7 +6,7 @@ from sqlalchemy.types import Uuid
 from typing import Optional, List, TYPE_CHECKING
 
 from sqlalchemy import (Integer, String, ForeignKey, types, Float, Text, DECIMAL, Table, Column,
-                        UniqueConstraint, Enum as SQLEnum, DateTime, func)
+                        UniqueConstraint, Enum as SQLEnum, DateTime, func, Boolean)
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from database import Base
@@ -187,6 +187,7 @@ class MovieModel(Base):
     certification_id: Mapped[int] = mapped_column(ForeignKey("certifications.id", ondelete="CASCADE"), nullable=False)
     certification: Mapped["CertificationsModel"] = relationship("CertificationsModel", back_populates="movies")
     ratings: Mapped[list["RatingsModel"]] = relationship("RatingsModel", back_populates="movie")
+    available: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     in_favorites: Mapped[list["UserProfileModel"]] = relationship(
         "UserProfileModel",
