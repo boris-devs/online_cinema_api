@@ -30,6 +30,8 @@ services:
         condition: service_healthy
     volumes:
       - pgadmin_cinema_data:/var/lib/pgadmin
+    environment:
+      - PGADMIN_CONFIG_MAX_LOGIN_ATTEMPTS
     networks:
       - cinema_network
 
