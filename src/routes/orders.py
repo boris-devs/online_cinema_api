@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, and_, insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 
 from database import get_db, UserModel, CartsModel, MovieModel, OrdersModel, OrderItemsModel, CartItemsModel
 from database.models.movies import PurchasedMoviesModel
@@ -13,7 +13,7 @@ from security.auth import get_current_user
 router = APIRouter()
 
 
-@router.post("/create/", response_model=OrderListSchema)
+@router.post("/create/",)
 async def create_order(current_user: int = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     user = await db.get(UserModel, current_user)
 
@@ -43,7 +43,20 @@ async def create_order(current_user: int = Depends(get_current_user), db: AsyncS
     if not movies_id_to_buy:
         raise HTTPException(status_code=400, detail="All movies from your cart already are bought.")
 
-    movies = await db.execute(select(MovieModel).where(MovieModel.id.in_(list(movies_id_to_buy))))
+    pending_movies = await db.execute(
+        select(OrdersModel)
+        .options(selectinload(OrdersModel.items).selectinload(OrderItemsModel.movie))
+        .where(
+            and_(OrdersModel.user_id == user.id,
+                 OrdersModel.status == StatusOrderEnum.pending,
+                 OrderItemsModel.movie_id.in_(movies_id_to_buy))
+        )
+    )
+    pending_movies = pending_movies.scalars().all()
+    print([item.items for item in pending_movies])
+
+    movies = await db.execute(select(MovieModel)
+                              .where(MovieModel.id.in_(list(movies_id_to_buy))))
     movies = movies.scalars().all()
 
     order_movies = []
