@@ -215,3 +215,14 @@ class MovieModel(Base):
 
     in_carts: Mapped[list["CartItemsModel"]] = relationship("CartItemsModel",
                                                             back_populates="movie")
+
+    def __repr__(self):
+        return f"(Movie_id={self.id}, name={self.name}, year={self.year}, time={self.time})"
+
+PurchasedMoviesModel = Table(
+    "purchased_movies",
+    Base.metadata,
+    Column("movie_id", Integer, ForeignKey("movies.id", ondelete="CASCADE"), primary_key=True),
+    Column("user_id", Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("created_at", DateTime(timezone=True), server_default=func.now(), nullable=False))
+

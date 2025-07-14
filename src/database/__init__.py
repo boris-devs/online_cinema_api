@@ -25,4 +25,9 @@ from database.models.shopping_cart import (
     CartItemsModel
 )
 
+from database.models.order import (
+    OrdersModel,
+    OrderItemsModel
+)
+
 from database.validators import accounts as accounts_validators

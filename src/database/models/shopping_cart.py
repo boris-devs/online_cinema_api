@@ -27,3 +27,6 @@ class CartItemsModel(Base):
     movie: Mapped["MovieModel"] = relationship("MovieModel", back_populates="in_carts")
 
     __table_args__ = (UniqueConstraint('cart_id', 'movie_id', name='cart_items_uc'),)
+
+    def __repr__(self):
+        return f"(CartItemsModel(id={self.id}, cart_id={self.cart_id}, movie_id={self.movie_id}, added_at={self.added_at})"
