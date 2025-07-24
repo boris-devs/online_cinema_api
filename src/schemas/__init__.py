@@ -11,4 +11,5 @@ from schemas.accounts import (
     TokenRefreshResponseSchema
 )
 
-from schemas.movies import MovieListSchema
+from schemas.movies import (MovieListSchema,
+                            MoviesOrderListSchema)

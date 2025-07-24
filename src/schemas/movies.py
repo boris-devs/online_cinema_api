@@ -82,6 +82,9 @@ class MovieBaseSchema(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+class MoviesOrderListSchema(MovieBaseSchema):
+    id: int
+
 
 class MovieListSchema(MovieBaseSchema):
     id: int
