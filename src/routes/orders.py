@@ -13,7 +13,7 @@ from security.auth import get_current_user
 router = APIRouter()
 
 
-@router.post("/create/",)
+@router.post("/create/", response_model=OrderListSchema)
 async def create_order(current_user: int = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     user = await db.get(UserModel, current_user)
 
@@ -38,6 +38,7 @@ async def create_order(current_user: int = Depends(get_current_user), db: AsyncS
         )
     )
     purchased_movies = purchased_movies.scalars().all()
+
     movies_id_to_buy = set(movies_id).difference(set(purchased_movies))
 
     if not movies_id_to_buy:
@@ -52,9 +53,17 @@ async def create_order(current_user: int = Depends(get_current_user), db: AsyncS
                  OrderItemsModel.movie_id.in_(movies_id_to_buy))
         )
     )
-    pending_movies = pending_movies.scalars().all()
-    print([item.items for item in pending_movies])
+    pending_movies = pending_movies.unique().scalars().all()
 
+    pending_movies_id = []
+    for order_items in pending_movies:
+        for item in order_items.items:
+            pending_movies_id.append(item.movie_id)
+
+    movies_id_to_buy = movies_id_to_buy.difference(pending_movies_id)
+    if not movies_id_to_buy:
+        raise HTTPException(status_code=400, detail=f"You don't have new movies in your cart yet. "
+                                                    f"In pending status you have {len(pending_movies_id)} movies.")
     movies = await db.execute(select(MovieModel)
                               .where(MovieModel.id.in_(list(movies_id_to_buy))))
     movies = movies.scalars().all()
@@ -87,7 +96,10 @@ async def create_order(current_user: int = Depends(get_current_user), db: AsyncS
             )
         await db.commit()
 
-        response = {"total_amount": total_amount, "count_movies": len(order_movies)}
+        response = {"time_order": order.created_at,
+                    "movies": movies,
+                    "total_amount": total_amount,
+                    "order_status": StatusOrderEnum.pending}
         return OrderListSchema.model_validate(response)
     except Exception as e:
         await db.rollback()
