@@ -108,6 +108,27 @@ async def create_order(current_user: int = Depends(get_current_user), db: AsyncS
         await db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
+
+@router.get("/my/", response_model=list[OrdersUserListSchema])
+async def user_list_orders(
+        current_user: int = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)):
+    user_orders = await db.execute(select(OrdersModel).where(OrdersModel.user_id == current_user))
+    user_orders = user_orders.scalars().all()
+    return [OrdersUserListSchema.model_validate(order) for order in user_orders]
+
+
+@router.get("/{id_order}/")
+async def get_order(
+        id_order: int,
+        current_user: int = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db)):
+    query = await db.execute(select(OrdersModel).where(OrdersModel.id == id_order,
+                                                       OrdersModel.user_id == current_user))
+    current_order = query.scalars().first()
+    return current_order
+
+
 @router.get("/", response_model=list[OrdersUsersModeratorResponseSchema])
 async def list_orders_users_by_moderator(
         user_email: Optional[str] = Query(None, description="Filter by user email"),
