@@ -69,6 +69,7 @@ class ReactionSchema(BaseModel):
 
 
 class MovieBaseSchema(BaseModel):
+    uuid: uuid.UUID
     name: str
     year: int
     time: int
@@ -78,6 +79,7 @@ class MovieBaseSchema(BaseModel):
     gross: Optional[float]
     description: Optional[str]
     price: float
+    available: bool
     certification_id: int
 
     model_config = ConfigDict(from_attributes=True)
@@ -85,6 +87,7 @@ class MovieBaseSchema(BaseModel):
 class MoviesOrderListSchema(MovieBaseSchema):
     id: int
 
+    model_config = ConfigDict(from_attributes=True)
 
 class MovieListSchema(MovieBaseSchema):
     id: int
