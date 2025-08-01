@@ -16,7 +16,7 @@ from security.auth import get_current_user
 router = APIRouter()
 
 
-@router.post("/create/", response_model=OrderListSchema)
+@router.post("/create/", response_model=OrderCreateSchema)
 async def create_order(current_user: int = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     user = await db.get(UserModel, current_user)
 
@@ -71,6 +71,9 @@ async def create_order(current_user: int = Depends(get_current_user), db: AsyncS
                               .where(MovieModel.id.in_(list(movies_id_to_buy))))
     movies = movies.scalars().all()
 
+    if not movies:
+        raise HTTPException(400, detail="In current time you dont have any movies what you could add in order.")
+
     order_movies = []
     total_amount = 0
     try:
@@ -99,11 +102,11 @@ async def create_order(current_user: int = Depends(get_current_user), db: AsyncS
             )
         await db.commit()
 
-        response = {"time_order": order.created_at,
+        response = {"created_at": order.created_at,
                     "movies": movies,
                     "total_amount": total_amount,
-                    "order_status": StatusOrderEnum.pending}
-        return OrderListSchema.model_validate(response)
+                    "status": StatusOrderEnum.pending}
+        return OrderCreateSchema.model_validate(response)
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
