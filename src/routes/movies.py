@@ -16,7 +16,7 @@ from database.models.movies import MovieModel, StarsModel, GenresModel, Director
     ReactionType, MovieFavoritesModel, RatingsModel, MovieGenresModel, CommentLikesModel, NotificationsModel, \
     MovieStarsModel, MovieDirectorsModel
 from schemas import MovieListSchema
-from database import get_db, CartItemsModel, UserGroupModel, UserGroupEnum
+from database import get_db, CartItemsModel, UserGroupModel, UserGroupEnum, OrderItemsModel, OrdersModel
 from schemas.movies import (MovieDetailSchema, MovieCreateSchema, MovieCommentCreateResponseSchema,
                             MovieCommentCreateRequestSchema, MovieUserReactionResponseSchema, MovieCreateResponseSchema,
                             MovieAddFavoriteResponseSchema, MovieRatingRequestSchema, MovieRatingResponseSchema,
@@ -244,36 +244,75 @@ async def delete_movie(
         moderator_profile: UserProfileModel = Depends(current_moderator_profile),
         db: AsyncSession = Depends(get_db)
 ):
-    movie = await db.get(MovieModel, movie_id)
-    if not movie:
-        raise HTTPException(status_code=404, detail="Movie not found.")
-    count_in_carts = await db.execute(select(func.count()).where(CartItemsModel.movie_id == movie.id))
-    count_in_carts = count_in_carts.scalar()
-    if count_in_carts > 0:
-        moderators = await db.execute(
-            select(UserModel).options(
-                selectinload(UserModel.profile))
-            .join(UserGroupModel)
-            .where(UserGroupModel.name == UserGroupEnum.moderator)
-        )
-        moderators = moderators.scalars().all()
+    try:
+        movie = await db.get(MovieModel, movie_id)
+        if not movie:
+            raise HTTPException(status_code=404, detail="Movie not found.")
 
-        message = (f"{moderator_profile.first_name} {moderator_profile.first_name} delete "
-                   f"movie {movie.name} but movie exists in {count_in_carts} carts.")
+        count_in_carts = await db.execute(
+            select(func.count()).where(CartItemsModel.movie_id == movie.id)
+        )
+        count_in_carts = count_in_carts.scalar()
+
+        if count_in_carts > 0:
+            moderators = await db.execute(
+                select(UserModel).options(
+                    selectinload(UserModel.profile))
+                .join(UserGroupModel)
+                .where(UserGroupModel.name == UserGroupEnum.moderator)
+            )
+            moderators = moderators.scalars().all()
+
+            message = (f"{moderator_profile.first_name} {moderator_profile.last_name} delete "
+                       f"movie {movie.name}. Movie exists in {count_in_carts} carts.")
+            notifications_data = [{
+                "user_profile_id": moderator.profile.id,
+                "movie_id": movie.id,
+                "message": message,
+                "movie_title": movie.name
+            } for moderator in moderators]
+
+            if notifications_data:
+                await db.execute(insert(NotificationsModel).values(notifications_data))
+
+        await db.execute(delete(CartItemsModel).where(CartItemsModel.movie_id == movie.id))
+
+        orders_with_film = await db.execute(
+            select(OrderItemsModel).options(selectinload(OrderItemsModel.order))
+            .where(OrderItemsModel.movie_id == movie.id))
+        orders_with_film = orders_with_film.scalars().all()
+        orders_id = [order_item.order_id for order_item in orders_with_film]
+
+        users_in_order = [order_item.order.user_id for order_item in orders_with_film]
+        message = (f"Movie {movie.name} has been deleted from our site. "
+                   f"Film was excluded from your order and recalculated the amount order.")
         notifications_data = [{
-            "user_profile_id": moderator.profile.id,
-            "movie_id": movie.id,
+            "user_id": user_id,
             "message": message,
-            "movie_title": movie.name
-        } for moderator in moderators]
+            "movie_title": movie.name,
+            "movie_id": movie.id,
+        } for user_id in users_in_order]
 
         if notifications_data:
             await db.execute(insert(NotificationsModel).values(notifications_data))
 
-    await db.execute(delete(CartItemsModel).where(CartItemsModel.movie_id == movie.id))
-    await db.delete(movie)
-    await db.commit()
-    return
+        await db.execute(delete(CommentsModel).where(CommentsModel.movie_id == movie.id))
+        await db.execute(delete(RatingsModel).where(RatingsModel.movie_id == movie.id))
+        await db.delete(movie)
+        await db.flush()
+
+        orders = await db.execute(
+            select(OrdersModel)
+            .options(selectinload(OrdersModel.items))
+            .where(OrdersModel.id.in_(orders_id))
+        )
+        orders = orders.scalars().all()
+
+        for order in orders:
+            order.total_amount = sum(item.price_at_order for item in order.items)
+        await db.commit()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/genres/add/", response_model=GenresDetailSchema, status_code=status.HTTP_201_CREATED)
