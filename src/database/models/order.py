@@ -29,10 +29,10 @@ class OrdersModel(Base):
     status: Mapped[StatusOrderEnum] = mapped_column(Enum(StatusOrderEnum), nullable=False,
                                                     default=StatusOrderEnum.pending)
     total_amount: Mapped[decimal] = mapped_column(DECIMAL(10, 2), nullable=False)
-    items: Mapped[list["OrderItemsModel"]] = relationship("OrderItemsModel", back_populates="order")
+    items: Mapped[list["OrderItemsModel"]] = relationship("OrderItemsModel", back_populates="order", cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"OrdersModel(id={self.id}, user_id={self.user_id}, status={self.status}, created_at={self.created_at})"
+        return f"OrdersModel(id={self.id}, user_id={self.user_id}, status={self.status}, created_at={self.created_at}, total_amount={self.total_amount})"
 
 class OrderItemsModel(Base):
     __tablename__ = 'order_items'
