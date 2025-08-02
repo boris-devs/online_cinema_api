@@ -12,7 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 from database import Base
 
 if TYPE_CHECKING:
-    from database import UserProfileModel, CartItemsModel
+    from database import UserProfileModel, CartItemsModel, UserModel
 
 
 class ReactionType(enum.Enum):
@@ -127,8 +127,10 @@ class NotificationsModel(Base):
     __tablename__ = "notifications"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_profile_id: Mapped[int] = mapped_column(ForeignKey("user_profiles.id", ondelete="CASCADE"))
+    user_profile_id: Mapped[int] = mapped_column(ForeignKey("user_profiles.id", ondelete="CASCADE"), nullable=True)
     user_profile: Mapped["UserProfileModel"] = relationship("UserProfileModel", back_populates="notifications")
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    user: Mapped["UserModel"] = relationship("UserModel")
     message: Mapped[str] = mapped_column(Text, nullable=False)
     comment_id: Mapped[int] = mapped_column(ForeignKey("comments.id", ondelete="CASCADE"), nullable=True)
     comment: Mapped["CommentsModel"] = relationship("CommentsModel", back_populates="notification")
@@ -211,7 +213,7 @@ class MovieModel(Base):
 
     reactions: Mapped[list["ReactionsModel"]] = relationship("ReactionsModel", back_populates="movie")
 
-    comments: Mapped[list["CommentsModel"]] = relationship("CommentsModel", back_populates="movie")
+    comments: Mapped[Optional[list["CommentsModel"]]] = relationship("CommentsModel", back_populates="movie")
 
     in_carts: Mapped[list["CartItemsModel"]] = relationship("CartItemsModel",
                                                             back_populates="movie")
