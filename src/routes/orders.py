@@ -65,7 +65,7 @@ async def create_order(current_user: int = Depends(get_current_user), db: AsyncS
 
     movies_id_to_buy = movies_id_to_buy.difference(pending_movies_id)
     if not movies_id_to_buy:
-        raise HTTPException(status_code=400, detail=f"You don't have new movies in your cart yet. "
+        raise HTTPException(status_code=400, detail=f"You already have this movies in your order. "
                                                     f"In pending status you have {len(pending_movies_id)} movies.")
     movies = await db.execute(select(MovieModel)
                               .where(MovieModel.id.in_(list(movies_id_to_buy))))
