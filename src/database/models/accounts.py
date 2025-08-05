@@ -6,11 +6,13 @@ from sqlalchemy import (Integer, String, Enum, Boolean, func, DateTime, ForeignK
 from sqlalchemy.orm import mapped_column, Mapped, relationship, validates
 
 from database import Base, account_validators
+from database import PaymentsModel
 from security import verify_password, hash_password, generate_secure_token
 
 if TYPE_CHECKING:
     from database import (ReactionsModel, CommentsModel, MovieModel,
-                          RatingsModel, CommentLikesModel, NotificationsModel, CartsModel, OrdersModel)
+                          RatingsModel, CommentLikesModel, NotificationsModel,
+                          CartsModel, OrdersModel, PaymentsModel)
 
 
 class UserGroupEnum(str, enum.Enum):
@@ -58,6 +60,7 @@ class UserModel(Base):
                                          nullable=False)
     cart: Mapped["CartsModel"] = relationship("CartsModel", back_populates="user", uselist=False)
     orders: Mapped[list["OrdersModel"]] = relationship("OrdersModel", back_populates="user")
+    payments: Mapped[Optional["PaymentsModel"]] = relationship("PaymentsModel", back_populates="user")
 
     activation_token: Mapped[Optional["ActivationTokenModel"]] = relationship(
         "ActivationTokenModel",

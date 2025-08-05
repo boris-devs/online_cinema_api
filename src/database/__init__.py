@@ -30,4 +30,9 @@ from database.models.order import (
     OrderItemsModel
 )
 
+from database.models.payments import (
+    PaymentsModel,
+    PaymentsItemsModel
+)
+
 from database.validators import accounts as accounts_validators
