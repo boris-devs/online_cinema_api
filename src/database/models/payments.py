@@ -21,7 +21,7 @@ class PaymentStatusEnum(str, enum.Enum):
 class PaymentsModel(Base):
     __tablename__ = 'payments'
 
-    id: Mapped[int] = mapped_column(Integer, auto_increment=True, primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, autoincrement=True, primary_key=True)
     user_id: Mapped[int] = ForeignKey('users.id', ondelete='CASCADE')
     user: Mapped["UserModel"] = relationship("UserModel", back_populates="payments")
     order_id: Mapped[int] = ForeignKey('orders.id', ondelete='CASCADE')
@@ -35,7 +35,7 @@ class PaymentsModel(Base):
 
 class PaymentsItemsModel(Base):
     __tablename__ = 'payments_items'
-    id: Mapped[int] = mapped_column(Integer, auto_increment=True, primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, autoincrement=True, primary_key=True)
     payment_id: Mapped["PaymentsModel"] = ForeignKey('payments.id', ondelete='CASCADE')
     payment: Mapped["PaymentsModel"] = relationship("PaymentsModel", back_populates="items")
     order_item_id: Mapped["OrderItemsModel"] = ForeignKey('order_items.id', ondelete='CASCADE')
