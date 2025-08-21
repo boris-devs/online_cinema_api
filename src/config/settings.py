@@ -53,6 +53,8 @@ class Settings(BaseAppSettings):
     EMAIL_USE_TLS: bool = os.getenv("EMAIL_USE_TLS", "False").lower() == "true"
     MAILHOG_API_PORT: int = os.getenv("MAILHOG_API_PORT", 8025)
 
+    """STRIPE SETTINGS"""
+    STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "KEY")
 
 class TestingSettings(BaseAppSettings):
     SECRET_KEY_ACCESS: str = "SECRET_KEY_ACCESS"
