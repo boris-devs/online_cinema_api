@@ -27,12 +27,14 @@ from database.models.shopping_cart import (
 
 from database.models.order import (
     OrdersModel,
-    OrderItemsModel
+    OrderItemsModel,
+    StatusOrderEnum
 )
 
 from database.models.payments import (
     PaymentsModel,
-    PaymentsItemsModel
+    PaymentsItemsModel,
+    PaymentStatusEnum
 )
 
 from database.validators import accounts as accounts_validators
