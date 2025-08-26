@@ -55,6 +55,7 @@ class Settings(BaseAppSettings):
 
     """STRIPE SETTINGS"""
     STRIPE_SECRET_KEY: str = os.getenv("STRIPE_SECRET_KEY", "KEY")
+    STRIPE_WEBHOOK_SECRET: str = os.getenv("STRIPE_WEBHOOK_SECRET", "SECRET")
 
 class TestingSettings(BaseAppSettings):
     SECRET_KEY_ACCESS: str = "SECRET_KEY_ACCESS"
