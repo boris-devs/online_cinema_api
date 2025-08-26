@@ -3,19 +3,20 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import Integer, ForeignKey, DateTime, func, Enum, Float, DECIMAL, String
+from sqlalchemy import Integer, ForeignKey, DateTime, func, Enum, DECIMAL, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
 
 if TYPE_CHECKING:
-    from database import UserModel, OrderItemsModel
+    from database import UserModel
 
 
 class PaymentStatusEnum(str, enum.Enum):
     successful: str = 'Successful'
     canceled: str = 'Canceled'
     refunded: str = 'Refunded'
+    pending: str = 'Pending'
 
 
 class PaymentsModel(Base):
@@ -27,11 +28,12 @@ class PaymentsModel(Base):
     order_id: Mapped[int] = mapped_column(ForeignKey('orders.id', ondelete='CASCADE'))
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
     status: Mapped[PaymentStatusEnum] = mapped_column(Enum(PaymentStatusEnum), nullable=False,
-                                                      default=PaymentStatusEnum.successful)
+                                                      default=PaymentStatusEnum.pending)
     amount: Mapped[Decimal] = mapped_column(DECIMAL(10, 2), nullable=False)
     external_payment_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
     items: Mapped["PaymentsItemsModel"] = relationship("PaymentsItemsModel", back_populates="payment")
+
 
 class PaymentsItemsModel(Base):
     __tablename__ = 'payments_items'
