@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from starlette import status
-from starlette.responses import RedirectResponse
+from starlette.requests import Request
 
-from database import get_db, OrdersModel, OrderItemsModel
+from database import get_db, OrdersModel, OrderItemsModel, PaymentsModel, PaymentsItemsModel
 import stripe
 
 from security.auth import get_current_user
@@ -29,6 +29,7 @@ async def cancel_payment(order_id: int):
 
 @router.post("/{id_order}/create/")
 async def create_payment(
+        request: Request,
         id_order: int,
         current_user: int = Depends(get_current_user),
         db: AsyncSession = Depends(get_db)):
@@ -39,6 +40,26 @@ async def create_payment(
     order = stmt.scalars().one_or_none()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found. Payment not started.")
+
+    payment = PaymentsModel(
+        user_id=current_user,
+        order_id=order.id,
+        amount=0,
+    )
+    db.add(payment)
+    await db.flush()
+
+    payment_items = [
+        {"payment_id": payment.id,
+         "order_item_id": item.id,
+         "price_at_payment": item.price_at_order}
+        for item in order.items
+    ]
+    await db.execute(insert(PaymentsItemsModel).values(payment_items))
+    final_price = sum([k.get("price_at_payment") for k in payment_items])
+
+    payment.amount = final_price
+
     try:
         session = stripe.checkout.Session.create(
             line_items=[
@@ -54,11 +75,12 @@ async def create_payment(
                 }
                 for item in order.items
             ],
-            metadata={"order_id": order.id, "user_id": current_user},
+            metadata={"order_id": str(order.id)},
             mode="payment",
-            success_url=f"http://localhost:8000/api/payments/success/{order.id}/",
-            cancel_url=f"http://localhost:8000/api/payments/cancel/{order.id}/",
+            success_url=f"{request.base_url}api/payments/success/{order.id}/",
+            cancel_url=f"{request.base_url}api/payments/cancel/{order.id}/",
         )
-        return RedirectResponse(session["url"], status_code=status.HTTP_302_FOUND)
+        await db.commit()
+        return session
     except stripe.error.StripeError as e:
         raise HTTPException(status_code=500, detail=str(e))
