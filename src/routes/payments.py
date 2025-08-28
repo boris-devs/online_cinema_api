@@ -5,7 +5,7 @@ from sqlalchemy.orm import selectinload
 from starlette import status
 from starlette.requests import Request
 
-from database import get_db, OrdersModel, OrderItemsModel, PaymentsModel, PaymentsItemsModel
+from database import get_db, OrdersModel, OrderItemsModel, PaymentsModel, PaymentsItemsModel, PaymentStatusEnum
 import stripe
 
 from security.auth import get_current_user
@@ -39,7 +39,14 @@ async def create_payment(
                OrdersModel.user_id == current_user))
     order = stmt.scalars().one_or_none()
     if not order:
-        raise HTTPException(status_code=404, detail="Order not found. Payment not started.")
+        raise HTTPException(status_code=404, detail="Order not found.")
+
+    payment_stmt = await db.execute(select(PaymentsModel).where(PaymentsModel.order_id == order.id))
+
+    exist_payment = payment_stmt.scalars().first()
+    if exist_payment:
+        if exist_payment.status in [PaymentStatusEnum.successful, PaymentStatusEnum.pending]:
+            raise HTTPException(status_code=400, detail=f"Payment already processed. Go to payment link.")
 
     payment = PaymentsModel(
         user_id=current_user,
