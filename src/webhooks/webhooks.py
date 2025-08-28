@@ -28,7 +28,6 @@ async def stripe_webhook(
     except stripe.error.SignatureVerificationError as e:
         raise HTTPException(status_code=400, detail="Invalid signature")
 
-        # Обрабатываем события оплаты
     if event['type'] == 'checkout.session.completed':
         session = event['data']['object']
         await handle_successful_payment(session, db)
@@ -53,8 +52,7 @@ async def handle_successful_payment(session, db: AsyncSession):
 
     if payment:
         payment.status = PaymentStatusEnum.successful
-        payment.external_payment_id = payment_intent_id  # Сохраняем ID платежа
-
+        payment.external_payment_id = payment_intent_id
         stmt_order = select(OrdersModel).where(OrdersModel.id == order_id)
         result_order = await db.execute(stmt_order)
         order = result_order.scalars().first()
@@ -66,7 +64,6 @@ async def handle_successful_payment(session, db: AsyncSession):
 
 
 async def handle_expired_payment(session, db: AsyncSession):
-    """Обработка истекшей сессии оплаты"""
     order_id = int(session['metadata']['order_id'])
 
     stmt = select(PaymentsModel).where(
