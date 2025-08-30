@@ -110,19 +110,22 @@ async def register_user(
         )
 
     try:
+        cart = CartsModel()
+        db.add(cart)
+        await db.flush()
+
         new_user = UserModel.create(
             email=str(user_data.email),
             raw_password=user_data.password,
             group_id=user_group.id,
+            cart_id=cart.id,
         )
         db.add(new_user)
         await db.flush()
 
+        cart.user_id = new_user.id
         user_profile = UserProfileModel(user_id=new_user.id)
         db.add(user_profile)
-
-        cart = CartsModel(user=new_user)
-        db.add(cart)
 
         activation_token = ActivationTokenModel(user_id=new_user.id)
         db.add(activation_token)
