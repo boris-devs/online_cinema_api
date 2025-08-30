@@ -30,8 +30,8 @@ class Settings(BaseAppSettings):
     POSTGRES_DB: str = os.getenv("POSTGRES_DB", "test_db")
 
     """JWT Settings"""
-    SECRET_KEY_ACCESS: str = os.getenv("SECRET_KEY_ACCESS", os.urandom(32))
-    SECRET_KEY_REFRESH: str = os.getenv("SECRET_KEY_REFRESH", os.urandom(32))
+    SECRET_KEY_ACCESS:str = os.getenv("SECRET_KEY_ACCESS") or "default_fallback_string_key"
+    SECRET_KEY_REFRESH: str = os.getenv("SECRET_KEY_REFRESH") or "default_fallback_string_key"
     JWT_SIGNING_ALGORITHM: str = os.getenv("JWT_SIGNING_ALGORITHM", "HS256")
 
     """S3 storage"""
