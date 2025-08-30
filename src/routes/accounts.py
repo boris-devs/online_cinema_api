@@ -33,6 +33,7 @@ from schemas import (
     TokenRefreshResponseSchema
 )
 from security.interface import JWTAuthManagerInterface
+from workers.tasks import remove_activation_token_after_delay
 
 router = APIRouter()
 
@@ -146,7 +147,9 @@ async def register_user(
             new_user.email,
             activation_link
         )
-
+        seconds_in_day = 24 * 60 * 60
+        remove_activation_token_after_delay.apply_async(args=[new_user.id, seconds_in_day],
+                                                        countdown=seconds_in_day)
         return UserRegistrationResponseSchema.model_validate(new_user)
 
 
