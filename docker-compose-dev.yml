@@ -177,6 +177,21 @@ services:
       - redis
       - celery_worker
 
+  stripe-cli:
+    image: stripe/stripe-cli
+    env_file:
+      - .env
+    entrypoint: [ "sh", "-c" ]
+    command: >
+      "stripe listen
+      --api-key $${STRIPE_SECRET_KEY}
+      --device-name local-user
+      --forward-to http://web:8000/api/webhooks/"
+    networks:
+      - cinema_network
+    depends_on:
+      - web
+
 volumes:
   postgres_cinema_data:
     driver: local
