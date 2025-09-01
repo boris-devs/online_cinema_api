@@ -12,9 +12,9 @@ from .celery_app import celery_app
 def delete_expired_token(user_id: int):
     from database import ActivationTokenModel
 
-    POSTGRES_CONNECTION = f"postgresql+asyncpg://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@"f"{os.getenv('POSTGRES_HOST', 'db')}:{os.getenv('POSTGRES_PORT', 5432)}/{os.getenv('POSTGRES_DB')}"
+    postgres_connection = f"postgresql+asyncpg://{os.getenv('POSTGRES_USER')}:{os.getenv('POSTGRES_PASSWORD')}@"f"{os.getenv('POSTGRES_HOST', 'db')}:{os.getenv('POSTGRES_PORT', 5432)}/{os.getenv('POSTGRES_DB')}"
 
-    async_postgres_engine = create_async_engine(POSTGRES_CONNECTION, echo=True)
+    async_postgres_engine = create_async_engine(postgres_connection, echo=True)
 
     AsyncPostgresqlSessionLocal = sessionmaker(  # type: ignore
         bind=async_postgres_engine,
@@ -40,7 +40,6 @@ def delete_expired_token(user_id: int):
                 raise
 
     asyncio.run(async_delete())
-    print(1)
 
 
 @celery_app.task
